@@ -1,3 +1,4 @@
+
 export type FamiliarityLevel = 'New' | 'Learning' | 'Familiar' | 'Mastered';
 
 export interface Word {
@@ -19,6 +20,6 @@ export interface ClozeQuestion {
 }
 
 export interface GeneratedWordDetails {
-  word: string;
-  details: string; // The AI-generated block of text.
+  word: string; // The word for which details were generated.
+  details: string; // The AI-generated block of text with markdown.
 }
