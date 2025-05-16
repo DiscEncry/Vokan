@@ -9,7 +9,7 @@ import type { Word, FamiliarityLevel } from '@/types';
 import { Sparkles, Flame, ThumbsUp, BadgeCheck, HelpCircle, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +19,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useVocabulary } from '@/context/VocabularyContext';
 import { useToast } from '@/hooks/use-toast';
