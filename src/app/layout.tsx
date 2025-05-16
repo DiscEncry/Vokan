@@ -1,27 +1,39 @@
 import type { Metadata } from 'next';
-// Removed GeistSans import
-// Removed GeistMono import: import { GeistMono } from 'geist/font/mono';
+import { Inter as FontSans } from 'next/font/google';
+import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { AuthProvider } from '@/context/AuthContext';
 import { VocabularyProvider } from '@/context/VocabularyContext';
 
+// Use Inter as the default sans-serif font
+const fontSans = FontSans({ 
+  subsets: ['latin'], 
+  variable: '--font-sans',
+});
+
 export const metadata: Metadata = {
-  title: 'Lexify - Contextual Vocabulary Learning',
-  description: 'Learn vocabulary in context with AI-powered exercises and spaced repetition.',
+  title: 'Lexify - Vocabulary Learning',
+  description: 'AI-powered vocabulary learning app',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased"> {/* Removed GeistSans.variable */}
-        <VocabularyProvider>
-          {children}
-          <Toaster />
-        </VocabularyProvider>
+      <body className={cn(
+        'min-h-screen bg-background font-sans antialiased',
+        fontSans.variable
+      )}>
+        <AuthProvider>
+          <VocabularyProvider>
+            {children}
+            <Toaster />
+          </VocabularyProvider>
+        </AuthProvider>
       </body>
     </html>
   );
