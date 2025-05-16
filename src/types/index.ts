@@ -19,7 +19,15 @@ export interface ClozeQuestion {
   targetWord: string; // The word that was originally in the blank
 }
 
+export interface TextInputQuestion {
+  sentenceWithBlank: string; // e.g., "The quick ___ fox..."
+  translatedHint: string; // Vietnamese translation of the original sentence
+  correctAnswer: string; // e.g., "brown"
+  targetWord: string; // The word that was originally in the blank
+}
+
 export interface GeneratedWordDetails {
   word: string; // The word for which details were generated.
   details: string; // The AI-generated block of text with markdown.
 }
+
