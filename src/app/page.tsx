@@ -2,9 +2,9 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppHeader } from "@/components/lexify/AppHeader";
-import { LibraryTabContent } from "@/components/lexify/library/LibraryTabContent";
-import { GamesTabContent } from "@/components/lexify/games/GamesTabContent";
-import { InsightsTabContent } from "@/components/lexify/insights/InsightsTabContent";
+import LibraryTabContent from "@/components/lexify/library/LibraryTabContent"; // Changed to default import
+import GamesTabContent from "@/components/lexify/games/GamesTabContent"; // Changed to default import
+import InsightsTabContent from "@/components/lexify/insights/InsightsTabContent"; // Changed to default import
 import { WordsMigrationHandler } from "@/components/auth/WordsMigrationHandler";
 
 export default function Home() {
