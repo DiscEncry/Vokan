@@ -23,7 +23,7 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   const { words: allLibraryWords, updateWordFamiliarity, isLoading: vocabLoading } = useVocabulary();
   const { toast } = useToast();
 
-  const libraryWords = React.useMemo(() => allLibraryWords.filter(w => w.familiarity === 'Learning'), [allLibraryWords]);
+  const libraryWords = React.useMemo(() => allLibraryWords.filter(w => w.familiarity === 'Familiar'), [allLibraryWords]);
 
   const [currentQuestion, setCurrentQuestion] = useState<TextInputQuestion | null>(null);
   const [nextQuestion, setNextQuestion] = useState<TextInputQuestion | null>(null);
@@ -81,8 +81,6 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
         }
     }
     if (eligibleWords.length === 0) {
-        // Fallback: if exclusion results in no words, consider all "Learning" words again
-        // This can happen if there's only one "Learning" word.
         return libraryWords.length > 0 ? libraryWords[Math.floor(Math.random() * libraryWords.length)] : null;
     }
     return eligibleWords[Math.floor(Math.random() * eligibleWords.length)];
@@ -91,20 +89,21 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   const localGenerateSingleQuestion = useCallback(async (targetWord: Word, abortController: AbortController): Promise<TextInputQuestion | null> => {
     if (!targetWord) return null;
     try {
+      // TODO: Pass abortController.signal to generateTextInputQuestion if supported by Genkit/underlying API
       const aiInput = { word: targetWord.text };
-      const questionData = await generateTextInputQuestion(aiInput); // Assuming options.signal can be passed if API supports it
+      const questionData = await generateTextInputQuestion(aiInput);
       
       if (!isMounted.current) return null;
       if (!questionData) {
-          setAiFailureCount(prev => prev + 1);
+          if (isMounted.current) setAiFailureCount(prev => prev + 1);
           return null;
       }
-      setAiFailureCount(0); // Reset on success
+      if (isMounted.current) setAiFailureCount(0); 
       return {
         sentenceWithBlank: questionData.sentenceWithBlank,
         translatedHint: questionData.translatedHint,
-        correctAnswer: questionData.targetWord, // AI might slightly alter casing, use its version for checking
-        targetWord: targetWord.text, // Keep original for display/details
+        correctAnswer: questionData.targetWord, 
+        targetWord: targetWord.text, 
       };
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
@@ -117,19 +116,20 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   }, [toast]);
 
   const fetchDetailsWithCache = useCallback(async (wordText: string, abortController: AbortController, setLoadingStateAction: React.Dispatch<React.SetStateAction<boolean>>): Promise<GeneratedWordDetails | null> => {
-    if (wordDetailsCache.current.has(wordText)) {
-      const cached = wordDetailsCache.current.get(wordText);
-      // Avoid returning cached error messages as success
+    const normalizedWordText = wordText.toLowerCase();
+    if (wordDetailsCache.current.has(normalizedWordText)) {
+      const cached = wordDetailsCache.current.get(normalizedWordText);
       if (cached && !cached.details.startsWith("Unable to retrieve full details")) {
           return cached;
       }
     }
     setLoadingStateAction(true);
     try {
-      const detailsData = await generateWordDetails({ word: wordText }); // Assuming options.signal can be passed
+      // TODO: Pass abortController.signal to generateWordDetails if supported
+      const detailsData = await generateWordDetails({ word: wordText }); 
       if (!isMounted.current) return null;
       if (detailsData && !detailsData.details.startsWith("Unable to retrieve full details")) {
-        wordDetailsCache.current.set(wordText, detailsData);
+        wordDetailsCache.current.set(normalizedWordText, detailsData);
       }
       return detailsData;
     } catch (error) {
@@ -137,17 +137,18 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
         console.error("Error fetching word details:", error);
         toast({ title: "AI Error", description: "Could not fetch word details.", variant: "destructive" });
       }
-      return { word: wordText, details: `Unable to retrieve full details for "${wordText}" at this time.` };
+      // Return a fallback structure if the API call fails entirely
+      return { word: wordText, details: `Unable to retrieve full details for "${wordText}" at this time. An error occurred.` };
     } finally {
       if (isMounted.current) setLoadingStateAction(false);
     }
   }, [toast]);
 
   const fetchAndStoreNextQuestionAndDetails = useCallback(async () => {
-    if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingTransition.current) return;
+    if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingTransition.current || isLoadingNextQuestion || isLoadingNextDetails) return;
 
     setIsLoadingNextQuestion(true);
-    setIsLoadingNextDetails(true);
+    setIsLoadingNextDetails(true); // Assume we'll fetch details
     setNextQuestion(null);
     setNextWordDetails(null);
     
@@ -159,35 +160,42 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     const nextTargetWordObj = selectTargetWord(currentQuestion?.targetWord ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined);
 
     if (!nextTargetWordObj) {
-      if (hasEnoughWords) toast({ title: "No more unique words", description: "You've cycled through all available 'Learning' words for now!", variant: "default" });
-      setIsLoadingNextQuestion(false);
-      setIsLoadingNextDetails(false);
+      if (hasEnoughWords && isMounted.current) toast({ title: "No more unique words", description: "You've cycled through all available 'Familiar' words for now!", variant: "default" });
+      if (isMounted.current) {
+        setIsLoadingNextQuestion(false);
+        setIsLoadingNextDetails(false);
+      }
       return;
     }
 
     try {
       const question = await localGenerateSingleQuestion(nextTargetWordObj, nextQuestionAbortController.current);
       if (isMounted.current && question) {
-        setNextQuestion(question);
+        setNextQuestion(question); // Set next question first
         const details = await fetchDetailsWithCache(question.targetWord, nextWordDetailsAbortController.current, setIsLoadingNextDetails);
         if (isMounted.current) {
-          setNextWordDetails(details);
+          setNextWordDetails(details); // Then set its details
         }
-      } else if (isMounted.current) { // Question generation failed
+      } else if (isMounted.current) { // Question generation failed or component unmounted
          setNextQuestion(null);
          setNextWordDetails(null);
-         setIsLoadingNextDetails(false); // Ensure details loading also stops
+         setIsLoadingNextDetails(false); 
       }
     } catch (error) {
-        // Errors are handled in localGenerateSingleQuestion and fetchDetailsWithCache
+       if(isMounted.current) {
+          console.error("Error in fetchAndStoreNextQuestionAndDetails: ", error);
+          setNextQuestion(null);
+          setNextWordDetails(null);
+          setIsLoadingNextDetails(false);
+       }
     } finally {
       if (isMounted.current) {
         setIsLoadingNextQuestion(false);
-        // setIsLoadingNextDetails is handled by fetchDetailsWithCache or if question is null
-        if(!nextQuestion && !nextWordDetails) setIsLoadingNextDetails(false);
+        // setIsLoadingNextDetails is managed by fetchDetailsWithCache or if question is null
+        if(!nextQuestion && !nextWordDetails && !isLoadingNextDetails) setIsLoadingNextDetails(false);
       }
     }
-  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast]);
+  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast, isLoadingNextDetails, isLoadingNextQuestion]);
 
 
   const resetQuestionState = () => {
@@ -197,14 +205,16 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     setHintRevealed(false);
     setAttempts(0);
     setShowDetails(false);
-    setWordDetails(null);
+    // wordDetails is cleared in handleNextQuestion before setting new current details
   };
 
   const handleNextQuestion = useCallback(async () => {
     if (isLoadingTransition.current || !isMounted.current) return;
     isLoadingTransition.current = true;
+    
     resetQuestionState();
     setIsLoadingCurrentQuestion(true);
+    setWordDetails(null); // Clear previous details
     
     currentQuestionAbortController.current?.abort();
     currentQuestionAbortController.current = new AbortController();
@@ -215,38 +225,54 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       if (nextQuestion) {
         setCurrentQuestion(nextQuestion);
         setWordDetails(nextWordDetails); // Use pre-fetched details
-        setNextQuestion(null);
-        setNextWordDetails(null);
         setIsLoadingCurrentQuestion(false);
-        if (nextWordDetails) setIsLoadingDetails(false); // If details were pre-fetched, not loading them now
+        if (nextWordDetails || wordDetailsCache.current.has(nextQuestion.targetWord.toLowerCase())) {
+             setIsLoadingDetails(false); // If details were pre-fetched or cached, not loading them now
+        } else {
+            // This case should be rare if pre-fetching works, but as a fallback
+            setIsLoadingDetails(true);
+            const d = await fetchDetailsWithCache(nextQuestion.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
+            if(isMounted.current) setWordDetails(d);
+        }
+        // Clear pre-fetched states for the next cycle
+        setNextQuestion(null); 
+        setNextWordDetails(null);
         await fetchAndStoreNextQuestionAndDetails();
       } else {
         // Fallback: if no next question was pre-fetched, generate one now
         const targetWordObj = selectTargetWord();
         if (targetWordObj) {
           const q = await localGenerateSingleQuestion(targetWordObj, currentQuestionAbortController.current);
-          setCurrentQuestion(q);
-          setIsLoadingCurrentQuestion(false);
-          if (q) {
-            const d = await fetchDetailsWithCache(q.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
-            setWordDetails(d);
-            await fetchAndStoreNextQuestionAndDetails(); // Then fetch the *next* next one
-          } else {
-            toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Learning' words or check AI status.", variant: "destructive" });
-             setCurrentQuestion(null); // End game or show error
+          if (isMounted.current) {
+            setCurrentQuestion(q);
+            setIsLoadingCurrentQuestion(false);
+            if (q) {
+              const d = await fetchDetailsWithCache(q.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
+              if(isMounted.current) setWordDetails(d);
+              await fetchAndStoreNextQuestionAndDetails(); 
+            } else {
+               if(isMounted.current) {
+                    toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Familiar' words or check AI status.", variant: "destructive" });
+                    setCurrentQuestion(null); 
+               }
+            }
           }
         } else {
-          setCurrentQuestion(null); // No words left
-          toast({ title: "No words left!", description: "You've completed all 'Learning' words.", variant: "default" });
+          if(isMounted.current){
+            setCurrentQuestion(null); 
+            toast({ title: "No words left!", description: "You've completed all 'Familiar' words.", variant: "default" });
+          }
         }
       }
     } catch (error) {
-        console.error("Error in handleNextQuestion:", error);
-        setCurrentQuestion(null);
-        toast({ title: "Error", description: "An unexpected error occurred while loading the next question.", variant: "destructive" });
+        if(isMounted.current) {
+            console.error("Error in handleNextQuestion:", error);
+            setCurrentQuestion(null);
+            toast({ title: "Error", description: "An unexpected error occurred while loading the next question.", variant: "destructive" });
+        }
     } finally {
       if (isMounted.current) {
-        setIsLoadingCurrentQuestion(false);
+        setIsLoadingCurrentQuestion(false); // Ensure this is false if an error occurred early
       }
       isLoadingTransition.current = false;
     }
@@ -254,11 +280,12 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
 
 
   const initializeGame = useCallback(async () => {
-    if (isLoadingTransition.current || !isMounted.current || vocabLoading || !hasEnoughWords) return;
+    if (isLoadingTransition.current || !isMounted.current || vocabLoading || !hasEnoughWords || gameInitialized) return;
     isLoadingTransition.current = true;
     
     resetQuestionState();
     setIsLoadingCurrentQuestion(true);
+    setWordDetails(null);
     
     currentQuestionAbortController.current?.abort();
     currentQuestionAbortController.current = new AbortController();
@@ -268,8 +295,10 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     try {
       const initialTargetWord = selectTargetWord();
       if (!initialTargetWord) {
-        setCurrentQuestion(null);
-        setIsLoadingCurrentQuestion(false);
+        if (isMounted.current) {
+            setCurrentQuestion(null);
+            setIsLoadingCurrentQuestion(false);
+        }
         isLoadingTransition.current = false;
         return;
       }
@@ -277,19 +306,17 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       if (isMounted.current) {
         setCurrentQuestion(question);
         if (question) {
-          // Fetch details for the first question
           const details = await fetchDetailsWithCache(question.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
-          setWordDetails(details); // Set details for the current question.
-                                   // Note: This WordDetailPanel will only show on correct answer.
-
-          // Pre-fetch the *next* question and its details
+          if(isMounted.current) setWordDetails(details);
           await fetchAndStoreNextQuestionAndDetails();
         }
       }
     } catch (error) {
-        console.error("Error initializing game:", error);
-        setCurrentQuestion(null);
-        toast({ title: "Error", description: "Could not initialize the game.", variant: "destructive" });
+        if(isMounted.current) {
+            console.error("Error initializing game:", error);
+            setCurrentQuestion(null);
+            toast({ title: "Error", description: "Could not initialize the game.", variant: "destructive" });
+        }
     } finally {
       if (isMounted.current) {
         setIsLoadingCurrentQuestion(false);
@@ -297,7 +324,7 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       }
       isLoadingTransition.current = false;
     }
-  }, [vocabLoading, hasEnoughWords, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast]);
+  }, [vocabLoading, hasEnoughWords, gameInitialized, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast]);
 
 
   useEffect(() => {
@@ -308,14 +335,14 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
 
   useEffect(() => {
     if (aiFailureCount >= 3) {
-      setShowAiFailureAlert(true);
+      if(isMounted.current) setShowAiFailureAlert(true);
     } else {
-      setShowAiFailureAlert(false);
+      if(isMounted.current) setShowAiFailureAlert(false);
     }
   }, [aiFailureCount]);
 
   const handleSubmit = async () => {
-    if (!currentQuestion || isCorrect) return;
+    if (!currentQuestion || isCorrect === true) return;
 
     setAttempts(prev => prev + 1);
     const correct = userInput.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
@@ -325,28 +352,30 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       toast({ title: "Correct!", description: `"${currentQuestion.correctAnswer}" is right!`, className: "bg-green-500 text-white" });
       const targetWordObject = allLibraryWords.find(w => w.text === currentQuestion.targetWord);
       if (targetWordObject) {
-        updateWordFamiliarity(targetWordObject.id, attempts === 1 && !hintRevealed ? 'Familiar' : 'Learning');
+        // If correct on 1st attempt with no hint, move from Familiar to Mastered
+        // Otherwise, it stays Familiar (as it's already Familiar to be in this game)
+        const newFamiliarity = (attempts === 0 && !hintRevealed) ? 'Mastered' : 'Familiar';
+        updateWordFamiliarity(targetWordObject.id, newFamiliarity);
       }
-      setShowDetails(true);
-      // Details might have been pre-fetched by initializeGame (for the first q) or handleNextQuestion (for subsequent)
-      // and set into wordDetails state. If not, fetchDetailsWithCache would have been called by those.
-      // Here we ensure isLoadingDetails reflects the state of the *current* question's details.
+      if(isMounted.current) setShowDetails(true);
+      
+      // Ensure details are loaded if not already (e.g. if pre-fetch failed or user was too quick)
       if (!wordDetails || wordDetails.word !== currentQuestion.targetWord) {
-          // This is a fallback if pre-fetching didn't align or wordDetails is for a previous question
+          if(isMounted.current) setIsLoadingDetails(true); // Show loader while fetching details for current question
           const d = await fetchDetailsWithCache(currentQuestion.targetWord, wordDetailsAbortController.current!, setIsLoadingDetails);
           if (isMounted.current) setWordDetails(d);
       } else {
-          setIsLoadingDetails(false); // Details were already loaded (likely pre-fetched)
+          if(isMounted.current) setIsLoadingDetails(false); 
       }
 
     } else {
       toast({ title: "Incorrect", description: "Try again!", variant: "destructive" });
-      setUserInput(''); // Clear input on incorrect
+      setUserInput(''); 
     }
   };
 
   const provideHint = () => {
-    if (currentQuestion && !hintRevealed) {
+    if (currentQuestion && !hintRevealed && currentQuestion.correctAnswer.length > 0) {
       setHint(`Hint: The word starts with '${currentQuestion.correctAnswer[0].toUpperCase()}'`);
       setHintRevealed(true);
     }
@@ -360,8 +389,8 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     return (
       <Alert variant="default" className="border-primary max-w-md mx-auto">
         <Lightbulb className="h-5 w-5 text-primary" />
-        <AlertTitle>Not Enough "Learning" Words</AlertTitle>
-        <AlertDescription>You need at least one word marked as "Learning" in your library to play this game. Please add or update words in the Library tab.</AlertDescription>
+        <AlertTitle>Not Enough "Familiar" Words</AlertTitle>
+        <AlertDescription>You need at least one word marked as "Familiar" in your library to play this game. Please add or update words in the Library tab, or play the Multiple Choice game.</AlertDescription>
         <Button onClick={onStopGame} variant="outline" className="mt-4">Back to Games Menu</Button>
       </Alert>
     );
@@ -429,7 +458,8 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
                   placeholder="Type the missing word"
                   className={`flex-grow text-lg ${isCorrect === false ? 'border-red-500 focus:ring-red-500' : ''} ${isCorrect === true ? 'border-green-500 focus:ring-green-500' : ''}`}
                   disabled={isCorrect === true}
-                  onKeyPress={(e) => e.key === 'Enter' && !isCorrect && handleSubmit()}
+                  onKeyPress={(e) => e.key === 'Enter' && isCorrect !== true && handleSubmit()}
+                  aria-label="Type the missing word"
                 />
                 <Button onClick={handleSubmit} disabled={isCorrect === true || !userInput.trim()} size="lg">
                   {isCorrect === true ? <CheckCircle className="h-5 w-5" /> : "Submit"}
@@ -438,7 +468,7 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
               {isCorrect === false && <p className="text-sm text-red-500 text-center">Incorrect, try again!</p>}
               {isCorrect === true && <p className="text-sm text-green-500 text-center">Correct!</p>}
               
-              {!isCorrect && !hintRevealed && (
+              {isCorrect !== true && !hintRevealed && (
                 <Button onClick={provideHint} variant="outline" size="sm" className="w-full sm:w-auto">
                   <HelpCircle className="mr-2 h-4 w-4" /> Get a Hint (First Letter)
                 </Button>
@@ -452,9 +482,9 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
               <Info className="h-5 w-5" />
               <AlertTitle>No Question Available</AlertTitle>
               <AlertDescription>
-                Could not load a question. You might need more words in "Learning" state, or there was an AI issue.
+                Could not load a question. You might need more words in "Familiar" state, or there was an AI issue.
               </AlertDescription>
-              <Button onClick={initializeGame} className="mt-3" disabled={isLoadingTransition.current}>
+              <Button onClick={initializeGame} className="mt-3" disabled={isLoadingTransition.current || isLoadingCurrentQuestion}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Try Again
               </Button>
             </Alert>
@@ -497,4 +527,3 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
 };
 
 export default TextInputGame;
-
