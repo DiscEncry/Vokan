@@ -69,7 +69,7 @@ const GamesTabContent: FC = () => {
 
       <Card className="w-full max-w-lg shadow-xl bg-gradient-to-br from-primary/10 via-background to-background border-primary/20">
         <CardHeader className="items-center text-center">
-          <Edit3 className="h-12 w-12 text-primary mb-2" /> {/* Changed text-accent to text-primary for icon color consistency with card theme */}
+          <Edit3 className="h-12 w-12 text-primary mb-2" />
           <CardTitle className="text-3xl font-bold">
             Text Input Challenge
           </CardTitle>
@@ -79,7 +79,7 @@ const GamesTabContent: FC = () => {
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <div className="p-4 bg-muted/50 rounded-lg shadow-inner">
-            <Info className="inline-block h-5 w-5 mr-2 text-primary align-middle" /> {/* Changed text-accent to text-primary */}
+            <Info className="inline-block h-5 w-5 mr-2 text-primary align-middle" />
             <span className="align-middle">Type the missing word. A Vietnamese translation of the sentence is provided as a hint.</span>
           </div>
           <p className="text-sm text-foreground">
@@ -87,8 +87,8 @@ const GamesTabContent: FC = () => {
           </p>
         </CardContent>
         <CardFooter className="flex justify-center">
-          {/* Button styling remains different to distinguish games, but card itself is uniform */}
-          <Button size="lg" onClick={() => handleStartGame('textInput')} variant="outline" className="text-lg py-7 px-10 border-accent hover:bg-accent/10 text-accent-foreground hover:text-accent-foreground">
+          {/* Button styling changed to match the Multiple Choice button */}
+          <Button size="lg" onClick={() => handleStartGame('textInput')} className="text-lg py-7 px-10">
             <PlayCircle className="mr-2 h-6 w-6" />
             Start Text Input
           </Button>
