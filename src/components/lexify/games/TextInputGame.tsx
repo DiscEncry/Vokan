@@ -19,20 +19,34 @@ interface TextInputGameProps {
   onStopGame: () => void;
 }
 
-const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
+const DEBUG = process.env.NODE_ENV === 'development'; // Or a dedicated debug flag
+
+const debugLog = (...args: any[]) => {
+  if (DEBUG) console.log("[TextInputGame]", ...args);
+};
+
+
+const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   const { words: allLibraryWords, updateWordFamiliarity, isLoading: vocabLoading } = useVocabulary();
   const { toast } = useToast();
 
-  const libraryWords = React.useMemo(() => allLibraryWords.filter(w => w.familiarity === 'Familiar'), [allLibraryWords]);
+  const libraryWords = React.useMemo(() => {
+    debugLog("Filtering library words. All words count:", allLibraryWords.length);
+    const filtered = allLibraryWords.filter(w => w.familiarity === 'Familiar' || w.familiarity === 'Mastered');
+    debugLog("Words with 'Familiar' or 'Mastered' familiarity:", filtered.length, filtered.map(w => `${w.text} (${w.familiarity})`));
+    return filtered;
+  }, [allLibraryWords]);
+
 
   const [currentQuestion, setCurrentQuestion] = useState<TextInputQuestion | null>(null);
   const [nextQuestion, setNextQuestion] = useState<TextInputQuestion | null>(null);
+  const wordDetailsCache = useRef<Map<string, GeneratedWordDetails>>(new Map());
   const [wordDetails, setWordDetails] = useState<GeneratedWordDetails | null>(null);
   const [nextWordDetails, setNextWordDetails] = useState<GeneratedWordDetails | null>(null);
 
   const [userInput, setUserInput] = useState('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
+  const [hintText, setHintText] = useState<string | null>(null); // Renamed from 'hint'
   const [hintRevealed, setHintRevealed] = useState(false);
   const [attempts, setAttempts] = useState(0);
 
@@ -45,7 +59,6 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   const [gameInitialized, setGameInitialized] = useState(false);
   const isLoadingTransition = useRef(false);
   const isMounted = useRef(true);
-  const wordDetailsCache = useRef<Map<string, GeneratedWordDetails>>(new Map());
   const [aiFailureCount, setAiFailureCount] = useState(0);
   const [showAiFailureAlert, setShowAiFailureAlert] = useState(false);
 
@@ -54,48 +67,80 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   const wordDetailsAbortController = useRef<AbortController | null>(null);
   const nextWordDetailsAbortController = useRef<AbortController | null>(null);
 
-
   const hasEnoughWords = libraryWords.length > 0;
 
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-      currentQuestionAbortController.current?.abort();
-      nextQuestionAbortController.current?.abort();
-      wordDetailsAbortController.current?.abort();
-      nextWordDetailsAbortController.current?.abort();
+      debugLog("Component unmounting, aborting controllers.");
+      currentQuestionAbortController.current?.abort("Component unmount");
+      nextQuestionAbortController.current?.abort("Component unmount");
+      wordDetailsAbortController.current?.abort("Component unmount");
+      nextWordDetailsAbortController.current?.abort("Component unmount");
     };
   }, []);
 
   const selectTargetWord = useCallback((excludeWordId?: string): Word | null => {
-    if (!hasEnoughWords) return null;
-    let eligibleWords = libraryWords;
-    if (excludeWordId) {
-      eligibleWords = eligibleWords.filter(w => w.id !== excludeWordId);
+    debugLog("selectTargetWord called. excludeWordId:", excludeWordId, "Total eligible words:", libraryWords.length);
+    if (!hasEnoughWords) {
+      debugLog("selectTargetWord: Not enough words.");
+      return null;
     }
+    
+    let eligibleForSelection = [...libraryWords];
+    debugLog("Initial eligible words for selection:", eligibleForSelection.map(w => w.text));
+
+    if (excludeWordId) {
+      eligibleForSelection = eligibleForSelection.filter(w => w.id !== excludeWordId);
+      debugLog("After filtering excludeWordId:", eligibleForSelection.map(w => w.text));
+    }
+    
     if (currentQuestion?.targetWord) {
         const currentTargetWordObj = libraryWords.find(w => w.text === currentQuestion.targetWord);
         if (currentTargetWordObj) {
-            eligibleWords = eligibleWords.filter(w => w.id !== currentTargetWordObj.id);
+            eligibleForSelection = eligibleForSelection.filter(w => w.id !== currentTargetWordObj.id);
+            debugLog("After filtering currentQuestion.targetWord:", eligibleForSelection.map(w => w.text));
         }
     }
-    if (eligibleWords.length === 0) {
-        return libraryWords.length > 0 ? libraryWords[Math.floor(Math.random() * libraryWords.length)] : null;
+
+    if (eligibleForSelection.length === 0) {
+      debugLog("No eligible words after filtering, falling back to any word from libraryWords if available.");
+      // Fallback: if filtering leaves no words, but the original libraryWords had items, pick one from there
+      // This ensures that if there's only one word, it can still be picked if not excluded.
+      if (libraryWords.length > 0 && !excludeWordId && !currentQuestion?.targetWord) {
+        return libraryWords[Math.floor(Math.random() * libraryWords.length)];
+      }
+      return libraryWords.length > 0 ? libraryWords[Math.floor(Math.random() * libraryWords.length)] : null;
     }
-    return eligibleWords[Math.floor(Math.random() * eligibleWords.length)];
+    
+    const selected = eligibleForSelection[Math.floor(Math.random() * eligibleForSelection.length)];
+    debugLog("Selected word for question:", selected ? selected.text : "None");
+    return selected;
   }, [libraryWords, currentQuestion, hasEnoughWords]);
 
+
   const localGenerateSingleQuestion = useCallback(async (targetWord: Word, abortController: AbortController): Promise<TextInputQuestion | null> => {
-    if (!targetWord) return null;
+    debugLog("localGenerateSingleQuestion for word:", targetWord?.text);
+    if (!targetWord) {
+      debugLog("localGenerateSingleQuestion: No target word provided.");
+      return null;
+    }
     try {
-      // TODO: Pass abortController.signal to generateTextInputQuestion if supported by Genkit/underlying API
       const aiInput = { word: targetWord.text };
-      const questionData = await generateTextInputQuestion(aiInput);
+      debugLog("Calling generateTextInputQuestion with:", aiInput);
+      const questionData = await generateTextInputQuestion(aiInput); 
+      debugLog("AI response for text input question:", questionData);
       
-      if (!isMounted.current) return null;
+      if (!isMounted.current) {
+        debugLog("localGenerateSingleQuestion: Component unmounted during generation.");
+        return null;
+      }
       if (!questionData) {
-          if (isMounted.current) setAiFailureCount(prev => prev + 1);
+          if (isMounted.current) {
+            debugLog("localGenerateSingleQuestion: AI returned null/undefined data.");
+            setAiFailureCount(prev => prev + 1);
+          }
           return null;
       }
       if (isMounted.current) setAiFailureCount(0); 
@@ -107,37 +152,47 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       };
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
-        console.error("Error generating text input question:", error);
+        debugLog("Error in localGenerateSingleQuestion:", error);
         toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
         setAiFailureCount(prev => prev + 1);
+      } else if (error instanceof Error && error.name === 'AbortError') {
+        debugLog("localGenerateSingleQuestion: Aborted.");
       }
       return null;
     }
   }, [toast]);
 
   const fetchDetailsWithCache = useCallback(async (wordText: string, abortController: AbortController, setLoadingStateAction: React.Dispatch<React.SetStateAction<boolean>>): Promise<GeneratedWordDetails | null> => {
+    debugLog("fetchDetailsWithCache for word:", wordText);
     const normalizedWordText = wordText.toLowerCase();
     if (wordDetailsCache.current.has(normalizedWordText)) {
       const cached = wordDetailsCache.current.get(normalizedWordText);
       if (cached && !cached.details.startsWith("Unable to retrieve full details")) {
+          debugLog("Returning cached details for:", wordText);
           return cached;
       }
     }
-    setLoadingStateAction(true);
+    debugLog("No valid cache for:", wordText, "Fetching from AI.");
+    if(isMounted.current) setLoadingStateAction(true);
     try {
-      // TODO: Pass abortController.signal to generateWordDetails if supported
-      const detailsData = await generateWordDetails({ word: wordText }); 
-      if (!isMounted.current) return null;
+      const detailsData = await generateWordDetails({ word: wordText });
+      debugLog("AI response for word details:", detailsData);
+      if (!isMounted.current) {
+        debugLog("fetchDetailsWithCache: Component unmounted during detail fetch.");
+        return null;
+      }
       if (detailsData && !detailsData.details.startsWith("Unable to retrieve full details")) {
         wordDetailsCache.current.set(normalizedWordText, detailsData);
+        debugLog("Cached new details for:", wordText);
       }
       return detailsData;
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
-        console.error("Error fetching word details:", error);
+        debugLog("Error in fetchDetailsWithCache:", error);
         toast({ title: "AI Error", description: "Could not fetch word details.", variant: "destructive" });
+      } else if (error instanceof Error && error.name === 'AbortError') {
+        debugLog("fetchDetailsWithCache: Aborted.");
       }
-      // Return a fallback structure if the API call fails entirely
       return { word: wordText, details: `Unable to retrieve full details for "${wordText}" at this time. An error occurred.` };
     } finally {
       if (isMounted.current) setLoadingStateAction(false);
@@ -145,22 +200,35 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
   }, [toast]);
 
   const fetchAndStoreNextQuestionAndDetails = useCallback(async () => {
-    if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingTransition.current || isLoadingNextQuestion || isLoadingNextDetails) return;
+    debugLog("fetchAndStoreNextQuestionAndDetails: Start. vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "isLoadingTransition:", isLoadingTransition.current, "isLoadingNextQ:", isLoadingNextQuestion, "isLoadingNextD:", isLoadingNextDetails);
+    if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingTransition.current || isLoadingNextQuestion || isLoadingNextDetails) {
+        debugLog("fetchAndStoreNextQuestionAndDetails: Bailing early due to conditions.");
+        if (!hasEnoughWords && isMounted.current && gameInitialized) { // only toast if game was already running
+            toast({ title: "No More Words", description: `You've reviewed all 'Familiar' or 'Mastered' words. Add more or change familiarity!`, variant: "default" });
+        }
+        return;
+    }
 
-    setIsLoadingNextQuestion(true);
-    setIsLoadingNextDetails(true); // Assume we'll fetch details
-    setNextQuestion(null);
-    setNextWordDetails(null);
+    if(isMounted.current) {
+        setIsLoadingNextQuestion(true);
+        setIsLoadingNextDetails(true); 
+        setNextQuestion(null);
+        setNextWordDetails(null);
+    }
     
-    nextQuestionAbortController.current?.abort();
+    nextQuestionAbortController.current?.abort("New next question fetch started");
     nextQuestionAbortController.current = new AbortController();
-    nextWordDetailsAbortController.current?.abort();
+    nextWordDetailsAbortController.current?.abort("New next details fetch started");
     nextWordDetailsAbortController.current = new AbortController();
 
-    const nextTargetWordObj = selectTargetWord(currentQuestion?.targetWord ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined);
+    const currentTargetWordId = currentQuestion ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined;
+    const nextTargetWordObj = selectTargetWord(currentTargetWordId);
+    debugLog("fetchAndStoreNextQuestionAndDetails: Next target word object:", nextTargetWordObj);
 
     if (!nextTargetWordObj) {
-      if (hasEnoughWords && isMounted.current) toast({ title: "No more unique words", description: "You've cycled through all available 'Familiar' words for now!", variant: "default" });
+      if (hasEnoughWords && isMounted.current) {
+        toast({ title: "No more unique words", description: "You've cycled through all available 'Familiar' or 'Mastered' words for now!", variant: "default" });
+      }
       if (isMounted.current) {
         setIsLoadingNextQuestion(false);
         setIsLoadingNextDetails(false);
@@ -171,19 +239,19 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     try {
       const question = await localGenerateSingleQuestion(nextTargetWordObj, nextQuestionAbortController.current);
       if (isMounted.current && question) {
-        setNextQuestion(question); // Set next question first
+        setNextQuestion(question); 
         const details = await fetchDetailsWithCache(question.targetWord, nextWordDetailsAbortController.current, setIsLoadingNextDetails);
         if (isMounted.current) {
-          setNextWordDetails(details); // Then set its details
+          setNextWordDetails(details); 
         }
-      } else if (isMounted.current) { // Question generation failed or component unmounted
+      } else if (isMounted.current) {
          setNextQuestion(null);
          setNextWordDetails(null);
-         setIsLoadingNextDetails(false); 
+         if(isMounted.current) setIsLoadingNextDetails(false); 
       }
     } catch (error) {
        if(isMounted.current) {
-          console.error("Error in fetchAndStoreNextQuestionAndDetails: ", error);
+          debugLog("Error in fetchAndStoreNextQuestionAndDetails catch block: ", error);
           setNextQuestion(null);
           setNextWordDetails(null);
           setIsLoadingNextDetails(false);
@@ -191,55 +259,66 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     } finally {
       if (isMounted.current) {
         setIsLoadingNextQuestion(false);
-        // setIsLoadingNextDetails is managed by fetchDetailsWithCache or if question is null
-        if(!nextQuestion && !nextWordDetails && !isLoadingNextDetails) setIsLoadingNextDetails(false);
+        if(!nextQuestion && !nextWordDetails && !isLoadingNextDetails) { // If no next Q/D by end, ensure details loader is off
+            setIsLoadingNextDetails(false);
+        }
       }
     }
-  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast, isLoadingNextDetails, isLoadingNextQuestion]);
+  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast, isLoadingNextDetails, isLoadingNextQuestion, gameInitialized]);
 
 
-  const resetQuestionState = () => {
+  const resetQuestionState = useCallback(() => {
+    debugLog("resetQuestionState called");
     setUserInput('');
     setIsCorrect(null);
-    setHint(null);
+    setHintText(null);
     setHintRevealed(false);
     setAttempts(0);
     setShowDetails(false);
-    // wordDetails is cleared in handleNextQuestion before setting new current details
-  };
+    // wordDetails is cleared in handleNextQuestion or initializeGame before setting new current details
+  }, []);
 
   const handleNextQuestion = useCallback(async () => {
+    debugLog("handleNextQuestion: Start. isLoadingTransition:", isLoadingTransition.current);
     if (isLoadingTransition.current || !isMounted.current) return;
+    
     isLoadingTransition.current = true;
+    debugLog("handleNextQuestion: Set isLoadingTransition to true.");
     
-    resetQuestionState();
-    setIsLoadingCurrentQuestion(true);
-    setWordDetails(null); // Clear previous details
+    if(isMounted.current) {
+      resetQuestionState();
+      setIsLoadingCurrentQuestion(true);
+      setWordDetails(null); 
+    }
     
-    currentQuestionAbortController.current?.abort();
+    currentQuestionAbortController.current?.abort("New current question fetch started");
     currentQuestionAbortController.current = new AbortController();
-    wordDetailsAbortController.current?.abort();
+    wordDetailsAbortController.current?.abort("New current details fetch started");
     wordDetailsAbortController.current = new AbortController();
 
     try {
+      debugLog("handleNextQuestion: nextQuestion:", nextQuestion, "nextWordDetails:", nextWordDetails);
       if (nextQuestion) {
-        setCurrentQuestion(nextQuestion);
-        setWordDetails(nextWordDetails); // Use pre-fetched details
-        setIsLoadingCurrentQuestion(false);
-        if (nextWordDetails || wordDetailsCache.current.has(nextQuestion.targetWord.toLowerCase())) {
-             setIsLoadingDetails(false); // If details were pre-fetched or cached, not loading them now
-        } else {
-            // This case should be rare if pre-fetching works, but as a fallback
-            setIsLoadingDetails(true);
+        if(isMounted.current) {
+            setCurrentQuestion(nextQuestion);
+            setWordDetails(nextWordDetails); 
+            setIsLoadingCurrentQuestion(false);
+        }
+        if (nextWordDetails || (nextQuestion && wordDetailsCache.current.has(nextQuestion.targetWord.toLowerCase()))) {
+             if(isMounted.current) setIsLoadingDetails(false); 
+        } else if (nextQuestion) { // If nextQuestion exists but details don't
+            if(isMounted.current) setIsLoadingDetails(true);
             const d = await fetchDetailsWithCache(nextQuestion.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
             if(isMounted.current) setWordDetails(d);
         }
         // Clear pre-fetched states for the next cycle
-        setNextQuestion(null); 
-        setNextWordDetails(null);
+        if(isMounted.current) {
+            setNextQuestion(null); 
+            setNextWordDetails(null);
+        }
         await fetchAndStoreNextQuestionAndDetails();
       } else {
-        // Fallback: if no next question was pre-fetched, generate one now
+        debugLog("handleNextQuestion: No pre-fetched nextQuestion. Generating one now.");
         const targetWordObj = selectTargetWord();
         if (targetWordObj) {
           const q = await localGenerateSingleQuestion(targetWordObj, currentQuestionAbortController.current);
@@ -251,69 +330,84 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
               if(isMounted.current) setWordDetails(d);
               await fetchAndStoreNextQuestionAndDetails(); 
             } else {
-               if(isMounted.current) {
-                    toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Familiar' words or check AI status.", variant: "destructive" });
+               if(isMounted.current){
+                    debugLog("handleNextQuestion: Failed to generate question on-the-fly.");
+                    toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Familiar' or 'Mastered' words or check AI status.", variant: "destructive" });
                     setCurrentQuestion(null); 
                }
             }
           }
         } else {
           if(isMounted.current){
+            debugLog("handleNextQuestion: No target word found for on-the-fly generation.");
             setCurrentQuestion(null); 
-            toast({ title: "No words left!", description: "You've completed all 'Familiar' words.", variant: "default" });
+            toast({ title: "No words left!", description: "You've completed all 'Familiar' or 'Mastered' words.", variant: "default" });
           }
         }
       }
     } catch (error) {
         if(isMounted.current) {
-            console.error("Error in handleNextQuestion:", error);
+            debugLog("Error in handleNextQuestion catch block:", error);
             setCurrentQuestion(null);
             toast({ title: "Error", description: "An unexpected error occurred while loading the next question.", variant: "destructive" });
         }
     } finally {
       if (isMounted.current) {
         setIsLoadingCurrentQuestion(false); // Ensure this is false if an error occurred early
+        debugLog("handleNextQuestion: Set isLoadingTransition to false in finally.");
       }
       isLoadingTransition.current = false;
     }
-  }, [nextQuestion, nextWordDetails, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast]);
+  }, [nextQuestion, nextWordDetails, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState]);
 
 
   const initializeGame = useCallback(async () => {
+    debugLog("initializeGame: Start. vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized, "isLoadingTransition:", isLoadingTransition.current);
     if (isLoadingTransition.current || !isMounted.current || vocabLoading || !hasEnoughWords || gameInitialized) return;
+    
     isLoadingTransition.current = true;
+    debugLog("initializeGame: Set isLoadingTransition to true.");
     
-    resetQuestionState();
-    setIsLoadingCurrentQuestion(true);
-    setWordDetails(null);
+    if(isMounted.current) {
+      resetQuestionState();
+      setIsLoadingCurrentQuestion(true);
+      setWordDetails(null);
+    }
     
-    currentQuestionAbortController.current?.abort();
+    currentQuestionAbortController.current?.abort("Game initialization started");
     currentQuestionAbortController.current = new AbortController();
-    wordDetailsAbortController.current?.abort();
+    wordDetailsAbortController.current?.abort("Game initialization started");
     wordDetailsAbortController.current = new AbortController();
 
     try {
       const initialTargetWord = selectTargetWord();
+      debugLog("initializeGame: Initial target word:", initialTargetWord);
       if (!initialTargetWord) {
         if (isMounted.current) {
+            debugLog("initializeGame: No initial target word found.");
             setCurrentQuestion(null);
             setIsLoadingCurrentQuestion(false);
         }
         isLoadingTransition.current = false;
+        debugLog("initializeGame: Set isLoadingTransition to false (no initial word).");
         return;
       }
       const question = await localGenerateSingleQuestion(initialTargetWord, currentQuestionAbortController.current);
       if (isMounted.current) {
         setCurrentQuestion(question);
         if (question) {
+          debugLog("initializeGame: Initial question generated:", question);
           const details = await fetchDetailsWithCache(question.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
           if(isMounted.current) setWordDetails(details);
+          debugLog("initializeGame: Initial details fetched:", details);
           await fetchAndStoreNextQuestionAndDetails();
+        } else {
+            debugLog("initializeGame: Failed to generate initial question.");
         }
       }
     } catch (error) {
         if(isMounted.current) {
-            console.error("Error initializing game:", error);
+            debugLog("Error in initializeGame catch block:", error);
             setCurrentQuestion(null);
             toast({ title: "Error", description: "Could not initialize the game.", variant: "destructive" });
         }
@@ -321,13 +415,15 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       if (isMounted.current) {
         setIsLoadingCurrentQuestion(false);
         setGameInitialized(true);
+        debugLog("initializeGame: Game initialized and set isLoadingTransition to false in finally.");
       }
       isLoadingTransition.current = false;
     }
-  }, [vocabLoading, hasEnoughWords, gameInitialized, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast]);
+  }, [vocabLoading, hasEnoughWords, gameInitialized, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState]);
 
 
   useEffect(() => {
+    debugLog("Effect for game initialization: vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized);
     if (!vocabLoading && hasEnoughWords && !gameInitialized) {
       initializeGame();
     }
@@ -335,33 +431,38 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
 
   useEffect(() => {
     if (aiFailureCount >= 3) {
-      if(isMounted.current) setShowAiFailureAlert(true);
+      if(isMounted.current) {
+        debugLog("AI failure count reached 3, showing alert.");
+        setShowAiFailureAlert(true);
+      }
     } else {
       if(isMounted.current) setShowAiFailureAlert(false);
     }
   }, [aiFailureCount]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
+    debugLog("handleSubmit: Start. currentQuestion:", currentQuestion, "isCorrect:", isCorrect);
     if (!currentQuestion || isCorrect === true) return;
 
     setAttempts(prev => prev + 1);
     const correct = userInput.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
     setIsCorrect(correct);
+    debugLog("handleSubmit: User input:", userInput, "Correct answer:", currentQuestion.correctAnswer, "Result:", correct);
 
     if (correct) {
       toast({ title: "Correct!", description: `"${currentQuestion.correctAnswer}" is right!`, className: "bg-green-500 text-white" });
       const targetWordObject = allLibraryWords.find(w => w.text === currentQuestion.targetWord);
       if (targetWordObject) {
-        // If correct on 1st attempt with no hint, move from Familiar to Mastered
-        // Otherwise, it stays Familiar (as it's already Familiar to be in this game)
         const newFamiliarity = (attempts === 0 && !hintRevealed) ? 'Mastered' : 'Familiar';
+        debugLog("handleSubmit: Updating familiarity for", targetWordObject.text, "to", newFamiliarity);
         updateWordFamiliarity(targetWordObject.id, newFamiliarity);
       }
       if(isMounted.current) setShowDetails(true);
       
-      // Ensure details are loaded if not already (e.g. if pre-fetch failed or user was too quick)
       if (!wordDetails || wordDetails.word !== currentQuestion.targetWord) {
-          if(isMounted.current) setIsLoadingDetails(true); // Show loader while fetching details for current question
+          if(isMounted.current) setIsLoadingDetails(true); 
+          wordDetailsAbortController.current?.abort("New correct answer, fetching details if needed.");
+          wordDetailsAbortController.current = new AbortController();
           const d = await fetchDetailsWithCache(currentQuestion.targetWord, wordDetailsAbortController.current!, setIsLoadingDetails);
           if (isMounted.current) setWordDetails(d);
       } else {
@@ -370,16 +471,19 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
 
     } else {
       toast({ title: "Incorrect", description: "Try again!", variant: "destructive" });
-      setUserInput(''); 
+      if(isMounted.current) setUserInput(''); 
     }
-  };
+  }, [currentQuestion, isCorrect, userInput, allLibraryWords, updateWordFamiliarity, toast, attempts, hintRevealed, wordDetails, fetchDetailsWithCache]);
 
-  const provideHint = () => {
+  const provideHint = useCallback(() => {
+    debugLog("provideHint: Start. currentQuestion:", currentQuestion, "hintRevealed:", hintRevealed);
     if (currentQuestion && !hintRevealed && currentQuestion.correctAnswer.length > 0) {
-      setHint(`Hint: The word starts with '${currentQuestion.correctAnswer[0].toUpperCase()}'`);
+      const newHintText = `Hint: The word starts with '${currentQuestion.correctAnswer[0].toUpperCase()}'`;
+      debugLog("provideHint: Setting hint text to:", newHintText);
+      setHintText(newHintText);
       setHintRevealed(true);
     }
-  };
+  }, [currentQuestion, hintRevealed]);
 
   if (vocabLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-2">Loading vocabulary...</span></div>;
@@ -389,8 +493,8 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
     return (
       <Alert variant="default" className="border-primary max-w-md mx-auto">
         <Lightbulb className="h-5 w-5 text-primary" />
-        <AlertTitle>Not Enough "Familiar" Words</AlertTitle>
-        <AlertDescription>You need at least one word marked as "Familiar" in your library to play this game. Please add or update words in the Library tab, or play the Multiple Choice game.</AlertDescription>
+        <AlertTitle>Not Enough "Familiar" or "Mastered" Words</AlertTitle>
+        <AlertDescription>You need at least one word marked as "Familiar" or "Mastered" in your library to play this game. Please add or update words in the Library tab.</AlertDescription>
         <Button onClick={onStopGame} variant="outline" className="mt-4">Back to Games Menu</Button>
       </Alert>
     );
@@ -473,16 +577,16 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
                   <HelpCircle className="mr-2 h-4 w-4" /> Get a Hint (First Letter)
                 </Button>
               )}
-              {hint && <p className="text-sm text-blue-600 dark:text-blue-400 text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-md">{hint}</p>}
+              {hintText && <p className="text-sm text-blue-600 dark:text-blue-400 text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-md">{hintText}</p>}
             </>
           )}
           
-          {!isLoadingCurrentQuestion && !currentQuestion && !vocabLoading && (
+          {!isLoadingCurrentQuestion && !currentQuestion && !vocabLoading && !isLoadingTransition.current && (
              <Alert variant="default">
               <Info className="h-5 w-5" />
               <AlertTitle>No Question Available</AlertTitle>
               <AlertDescription>
-                Could not load a question. You might need more words in "Familiar" state, or there was an AI issue.
+                Could not load a question. You might need more words in "Familiar" or "Mastered" state, or there was an AI issue.
               </AlertDescription>
               <Button onClick={initializeGame} className="mt-3" disabled={isLoadingTransition.current || isLoadingCurrentQuestion}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Try Again
@@ -524,6 +628,7 @@ const TextInputGame: FC<TextInputGameProps> = ({ onStopGame }) => {
       )}
     </div>
   );
-};
-
+});
+TextInputGame.displayName = 'TextInputGame';
 export default TextInputGame;
+
