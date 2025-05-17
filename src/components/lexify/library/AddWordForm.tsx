@@ -7,31 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Loader2, Search, AlertCircle, CheckCircle } from 'lucide-react';
+import { PlusCircle, Loader2, Search, AlertCircle, CheckCircle, Volume2 } from 'lucide-react';
 import { useVocabulary, MAX_WORD_LENGTH } from '@/context/VocabularyContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAutocomplete } from '@/hooks/useAutocomplete';
 import { cn } from '@/lib/utils';
-import { validateWord } from '@/app/actions/validate-word-action';
-import type { ValidateWordResult } from '@/types';
-
 
 const AddWordForm: FC = () => {
   const [newWord, setNewWord] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [isVerifyingWithAPI, setIsVerifyingWithAPI] = useState(false); // New state for API validation
-
-  // Autocomplete state
+  
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [inputFocused, setInputFocused] = useState(false);
 
   const { addWord, words: libraryWords } = useVocabulary();
   const { toast } = useToast();
-  const {
-    suggestions: autocompleteSuggestions,
-    loading: autocompleteLoading,
+  const { 
+    suggestions: autocompleteSuggestions, 
+    loading: autocompleteLoading, 
     error: autocompleteError,
+    suggestionInput 
   } = useAutocomplete(newWord);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,71 +36,74 @@ const AddWordForm: FC = () => {
   const suggestionsListRef = useRef<HTMLUListElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
 
+  const isInitialDictionaryLoading = newWord.length === 0 && autocompleteLoading;
+  const isLoadingUI = isAdding || isInitialDictionaryLoading;
 
-  // Effect to control Popover visibility based on focus and suggestions
- useEffect(() => {
-    if (!inputFocused) {
-      // If input is not focused, ensure popover is closed after a short delay
-      // This allows clicks on suggestions to register if popover was open
-      const timer = setTimeout(() => setIsPopoverOpen(false), 150);
-      return () => clearTimeout(timer);
-    }
-
-    // Input is focused
-    if (newWord.trim().length === 0 || autocompleteError) {
+  useEffect(() => {
+    if (!isInitialDictionaryLoading && newWord.trim() && !autocompleteError) {
+      setSuggestions(autocompleteSuggestions);
+      if (autocompleteSuggestions.length > 0 && inputFocused) {
+        setIsPopoverOpen(true);
+      } else if (autocompleteSuggestions.length === 0 && inputFocused && newWord.trim().length > 0 && !autocompleteLoading) {
+         // Keep popover open to show "No suggestions" if focused and input typed
+         setIsPopoverOpen(true);
+      } else if (autocompleteSuggestions.length === 0 && newWord.trim().length > 0 && !autocompleteLoading) {
+        setIsPopoverOpen(false); // Close if no suggestions and not loading
+      }
+    } else if (autocompleteError) {
+      setSuggestions([]);
       setIsPopoverOpen(false);
-      return;
-    }
-
-    if (autocompleteLoading || autocompleteSuggestions.length > 0) {
-      setIsPopoverOpen(true);
-    } else {
-      // Not loading, no error, input has text, but no suggestions found
+    } else if (!newWord.trim()) {
+      setSuggestions([]);
       setIsPopoverOpen(false);
     }
-  }, [inputFocused, newWord, autocompleteLoading, autocompleteSuggestions, autocompleteError]);
+  }, [autocompleteSuggestions, newWord, autocompleteLoading, autocompleteError, inputFocused, isInitialDictionaryLoading]);
 
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNewWord(value);
     setActiveSuggestionIndex(-1);
     if (!value.trim()) {
+      setSuggestions([]); // Clear suggestions if input is empty
       setIsPopoverOpen(false);
     }
-  };
+  }, []);
 
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     setInputFocused(true);
-    // Popover visibility is handled by the useEffect
-  };
+    if (newWord.trim() && suggestions.length > 0 && !autocompleteError) {
+      setIsPopoverOpen(true);
+    } else if (newWord.trim() && !autocompleteError && !autocompleteLoading) {
+      // If there's text and we are not loading and no error, open to show "No suggestions" or actual suggestions
+      setIsPopoverOpen(true);
+    }
+  }, [newWord, suggestions, autocompleteError, autocompleteLoading]);
 
-  const handleInputBlur = () => {
+  const handleInputBlur = useCallback(() => {
     setInputFocused(false);
-    // Delay closing to allow click events on suggestions or submit
-    // The useEffect will handle the actual closing if focus truly moved away
+    // Delay closing popover to allow click on suggestion or submit button
     setTimeout(() => {
       if (
-        document.activeElement === inputRef.current ||
-        (popoverContentRef.current && popoverContentRef.current.contains(document.activeElement)) ||
-        (submitButtonRef.current && submitButtonRef.current.contains(document.activeElement))
+        document.activeElement !== inputRef.current &&
+        !popoverContentRef.current?.contains(document.activeElement) &&
+        document.activeElement !== submitButtonRef.current
       ) {
-        return;
+        setIsPopoverOpen(false);
       }
-      // If focus moved elsewhere, and conditions in useEffect aren't met, it will close
     }, 150);
-  };
+  }, []);
 
-
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionClick = useCallback((suggestion: string) => {
     setNewWord(suggestion);
+    setSuggestions([]);
     setIsPopoverOpen(false);
     setActiveSuggestionIndex(-1);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
+    inputRef.current?.focus();
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isPopoverOpen || autocompleteSuggestions.length === 0) {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isPopoverOpen || suggestions.length === 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault();
       return;
     }
@@ -111,27 +111,30 @@ const AddWordForm: FC = () => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setActiveSuggestionIndex(prev => (prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev));
+        setActiveSuggestionIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setActiveSuggestionIndex(prev => (prev > 0 ? prev - 1 : 0));
+        setActiveSuggestionIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
         break;
       case 'Enter':
-        if (activeSuggestionIndex >= 0 && activeSuggestionIndex < autocompleteSuggestions.length) {
+        if (activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
           e.preventDefault();
-          handleSuggestionClick(autocompleteSuggestions[activeSuggestionIndex]);
-        } else {
-          // Allow form submission if Enter is pressed in input and no suggestion is active
-           // The form's onSubmit will handle this
+          handleSuggestionClick(suggestions[activeSuggestionIndex]);
         }
+        // If no suggestion active, Enter key will submit the form by default
         break;
       case 'Escape':
         e.preventDefault();
         setIsPopoverOpen(false);
+        setActiveSuggestionIndex(-1);
+        break;
+      case 'Tab':
+        setIsPopoverOpen(false);
+        setActiveSuggestionIndex(-1);
         break;
     }
-  };
+  }, [isPopoverOpen, suggestions, activeSuggestionIndex, handleSuggestionClick]);
 
   useEffect(() => {
     if (activeSuggestionIndex >= 0 && suggestionsListRef.current) {
@@ -140,9 +143,9 @@ const AddWordForm: FC = () => {
     }
   }, [activeSuggestionIndex]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isAdding || isVerifyingWithAPI) return;
+    if (isLoadingUI) return;
 
     const trimmedWord = newWord.trim();
 
@@ -171,72 +174,33 @@ const AddWordForm: FC = () => {
         variant: "destructive",
       });
       setNewWord(''); // Clear input for duplicate
+      setIsPopoverOpen(false);
       return;
     }
 
-    setIsVerifyingWithAPI(true);
-    let validationResult: ValidateWordResult | null = null;
-    try {
-      validationResult = await validateWord(trimmedWord);
-    } catch (error) {
-      console.error("Error calling validateWord server action:", error);
-      toast({
-        title: "Validation Error",
-        description: "Could not verify the word. Please try again.",
-        variant: "destructive",
-      });
-      setIsVerifyingWithAPI(false);
-      return;
-    }
-    setIsVerifyingWithAPI(false);
+    setIsAdding(true);
+    const added = await addWord(trimmedWord);
+    setIsAdding(false);
 
-    if (validationResult.status === 'valid') {
-      setIsAdding(true);
-      const added = await addWord(trimmedWord);
-      setIsAdding(false);
-
-      if (added) {
-        toast({
-          title: "Word Added",
-          description: `"${trimmedWord}" has been added to your library.`,
-          action: <CheckCircle className="text-green-500" />,
-        });
-        setNewWord('');
-        setIsPopoverOpen(false);
-        setActiveSuggestionIndex(-1);
-      } else {
-        // This case might occur if addWord itself has some internal failure,
-        // though duplicate check is done above.
-        toast({
-          title: "Could Not Add Word",
-          description: `Failed to add "${trimmedWord}".`,
-          variant: "destructive",
-        });
-      }
-    } else if (validationResult.status === 'not_found') {
+    if (added) {
       toast({
-        title: "Word Not Found",
-        description: validationResult.message,
-        variant: "destructive",
+        title: "Word Added",
+        description: `"${trimmedWord}" has been added to your library.`,
+        action: <CheckCircle className="text-green-500" />,
       });
-      // Optionally clear input or keep it for correction
-      // setNewWord('');
-    } else if (validationResult.status === 'invalid_input') {
-       toast({
-        title: "Invalid Input",
-        description: validationResult.message,
-        variant: "destructive",
-      });
-    } else { // api_error
+      setNewWord('');
+      setIsPopoverOpen(false);
+      setActiveSuggestionIndex(-1);
+    } else {
       toast({
-        title: "Validation API Error",
-        description: validationResult.message || "An error occurred validating the word with the dictionary API.",
+        title: "Could Not Add Word",
+        description: `Failed to add "${trimmedWord}". This might be due to a network issue or an internal error.`,
         variant: "destructive",
       });
     }
-  };
+  }, [newWord, addWord, libraryWords, toast, isLoadingUI]);
 
-  const isLoadingUI = isAdding || isVerifyingWithAPI;
+  const highlightPrefix = suggestionInput.trim().toLowerCase();
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 items-start w-full">
@@ -252,11 +216,11 @@ const AddWordForm: FC = () => {
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               onKeyDown={handleKeyDown}
-              placeholder="Enter a new word or phrase"
+              placeholder={isInitialDictionaryLoading ? "Initializing dictionary..." : "Enter a new word or phrase"}
               className="flex-grow w-full pl-10"
               aria-label="New word input"
               aria-autocomplete="list"
-              aria-controls={isPopoverOpen ? "autocomplete-suggestions-list" : undefined}
+              aria-controls="autocomplete-suggestions-list"
               aria-expanded={isPopoverOpen}
               aria-activedescendant={activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
               autoComplete="off"
@@ -264,92 +228,101 @@ const AddWordForm: FC = () => {
             />
           </div>
         </PopoverAnchor>
-        {isPopoverOpen && (
-          <PopoverContent
-            ref={popoverContentRef}
-            className="w-[--radix-popover-trigger-width] p-0"
-            side="bottom"
-            align="start"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => e.preventDefault()}
-          >
-            {autocompleteError && (
-              <div className="p-2 text-sm text-red-500 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" /> Error loading suggestions: {autocompleteError}
-              </div>
-            )}
-            {!autocompleteError && (
-              <>
-                {autocompleteLoading && autocompleteSuggestions.length === 0 && (
-                  <div className="p-2 text-sm text-muted-foreground">Loading suggestions...</div>
-                )}
+        <PopoverContent
+          ref={popoverContentRef}
+          className="w-[--radix-popover-trigger-width] p-0"
+          side="bottom"
+          align="start"
+          onOpenAutoFocus={(e) => e.preventDefault()} 
+          onCloseAutoFocus={(e) => {
+            // Prevent popover from re-focusing input if focus moved to submit button
+             if (document.activeElement === submitButtonRef.current) {
+                 e.preventDefault();
+             }
+          }}
+        >
+          {autocompleteError && (
+            <div className="p-2 text-sm text-red-500 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" /> Error loading suggestions: {autocompleteError}
+            </div>
+          )}
+          {!autocompleteError && (
+            <>
+              {autocompleteLoading && suggestions.length === 0 && (
+                <div className="p-2 text-sm text-muted-foreground">Loading suggestions...</div>
+              )}
+              {!autocompleteLoading && newWord.trim() && suggestions.length === 0 && (
+                <div className="p-2 text-sm text-muted-foreground">No suggestions found</div>
+              )}
+              {suggestions.length > 0 && (
+                <ScrollArea className="max-h-60">
+                  <ul
+                    ref={suggestionsListRef}
+                    className="py-1"
+                    role="listbox"
+                    id="autocomplete-suggestions-list"
+                  >
+                    {suggestions.map((suggestion, index) => {
+                      const suggestionLower = suggestion.toLowerCase();
+                      const prefixIndex = suggestionLower.indexOf(highlightPrefix);
+                      let head = suggestion;
+                      let tail = "";
 
-                {autocompleteSuggestions.length > 0 && (
-                  <ScrollArea className="max-h-60">
-                    <ul
-                      ref={suggestionsListRef}
-                      className="py-1"
-                      role="listbox"
-                      id="autocomplete-suggestions-list"
-                    >
-                      {autocompleteSuggestions.map((suggestion, index) => {
-                        const suggestionTrimmed = suggestion.trim();
-                        const inputTrimmed = newWord.trim();
-                        let matchLength = 0;
-
-                        // Find the length of the matching prefix, case-insensitively
-                        for (let i = 0; i < inputTrimmed.length; i++) {
-                            if (i < suggestionTrimmed.length && inputTrimmed[i].toLowerCase() === suggestionTrimmed[i].toLowerCase()) {
-                                matchLength++;
-                            } else {
-                                break;
-                            }
-                        }
-                        
-                        const head = suggestionTrimmed.slice(0, matchLength);
-                        const tail = suggestionTrimmed.slice(matchLength);
-
-                        return (
-                          <li key={`${suggestionTrimmed}-${index}`} role="option" aria-selected={activeSuggestionIndex === index}>
-                            <Button
-                              id={`suggestion-${index}`}
-                              type="button"
-                              variant="ghost"
-                              className={cn(
-                                "w-full justify-start text-left h-auto py-1.5 px-2 rounded-sm text-sm",
-                                activeSuggestionIndex === index && "bg-accent text-accent-foreground"
-                              )}
-                              onClick={() => handleSuggestionClick(suggestionTrimmed)}
-                              onMouseDown={(e) => e.preventDefault()}
-                            >
-                              <span>
-                                <strong className="font-bold">{head}</strong>
-                                {tail}
-                              </span>
-                            </Button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </ScrollArea>
-                )}
-                 {!autocompleteLoading && newWord.trim() && autocompleteSuggestions.length === 0 && !autocompleteError && (
-                  <div className="p-2 text-sm text-muted-foreground">No suggestions found</div>
-                )}
-              </>
-            )}
-          </PopoverContent>
-        )}
+                      if (prefixIndex === 0 && highlightPrefix.length > 0) {
+                        head = suggestion.substring(0, highlightPrefix.length);
+                        tail = suggestion.substring(highlightPrefix.length);
+                      } else {
+                        // Fallback if prefix not at start (should ideally not happen with startsWith logic)
+                        // or if highlightPrefix is empty.
+                        // For safety, just render the suggestion without highlighting.
+                        head = suggestion;
+                        tail = "";
+                      }
+                      
+                      return (
+                        <li key={`${suggestion}-${index}`} role="option" aria-selected={activeSuggestionIndex === index}>
+                          <Button
+                            id={`suggestion-${index}`}
+                            type="button"
+                            variant="ghost"
+                            className={cn(
+                              "w-full justify-start text-left h-auto py-1.5 px-2 rounded-sm text-sm",
+                              activeSuggestionIndex === index && "bg-accent text-accent-foreground"
+                            )}
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            onMouseDown={(e) => e.preventDefault()} 
+                          >
+                            <span>
+                              <strong>{head}</strong>
+                              {tail}
+                            </span>
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </ScrollArea>
+              )}
+            </>
+          )}
+        </PopoverContent>
       </Popover>
 
-      <Button ref={submitButtonRef} type="submit" variant="default" size="lg" disabled={isLoadingUI || !newWord.trim()} className="mt-2">
+      <Button 
+        ref={submitButtonRef} 
+        type="submit" 
+        variant="default" 
+        size="lg" 
+        disabled={isLoadingUI || !newWord.trim()} 
+        className="mt-2"
+      >
         {isAdding ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : 
-         isVerifyingWithAPI ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : 
+         isInitialDictionaryLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> :
          <PlusCircle className="mr-2 h-5 w-5" />}
-        {isAdding ? "Adding..." : isVerifyingWithAPI ? "Verifying..." : "Add Word"}
+        {isAdding ? "Adding..." : isInitialDictionaryLoading ? "Loading List..." : "Add Word"}
       </Button>
     </form>
   );
 };
 
-export default AddWordForm;
+export default React.memo(AddWordForm);

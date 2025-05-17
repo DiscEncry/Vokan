@@ -8,8 +8,7 @@ export interface Word {
   familiarity: FamiliarityLevel;
   lastReviewed?: string; // Store as ISO string
   nextReviewDate?: string; // Store as ISO string
-  // srsData?: any; // Placeholder for FSRS specific data, like stability, difficulty
-  // For simplicity in this phase, we'll mainly use familiarity
+  // srsData?: any; // Placeholder for FSRS specific data
 }
 
 export interface ClozeQuestion {
@@ -31,11 +30,12 @@ export interface GeneratedWordDetails {
   details: string; // The AI-generated block of text with markdown.
 }
 
-export type ValidateWordStatus = 'valid' | 'not_found' | 'api_error' | 'invalid_input';
-
-export interface ValidateWordResult {
-  word: string;
-  status: ValidateWordStatus;
-  message: string;
-  apiResponse?: any; // Optional: include raw API response for debugging
-}
+// ValidateWordStatus and ValidateWordResult types are removed as the validation system is no longer in use.
+// export type ValidateWordStatus = 'valid' | 'not_found' | 'api_error' | 'invalid_input';
+//
+// export interface ValidateWordResult {
+//   word: string;
+//   status: ValidateWordStatus;
+//   message: string;
+//   apiResponse?: any; // Optional: include raw API response for debugging
+// }

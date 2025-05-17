@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { FC } from 'react';
@@ -9,27 +10,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useVocabulary } from '@/context/VocabularyContext';
 import { useToast } from '@/hooks/use-toast';
 
-// Maximum file size: 5 MB
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-// Maximum words to process at once
-const MAX_WORDS = 5000;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_WORDS_TO_PROCESS_AT_ONCE = 5000;
+const MAX_WORD_LENGTH_IMPORT = 100;
 
 const ImportWordsSection: FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addWordsBatch } = useVocabulary();
+  const { addWordsBatch, words: libraryWords } = useVocabulary();
   const { toast } = useToast();
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
-    
     if (!file) {
       setSelectedFile(null);
       return;
     }
-    
-    // Validate file type
     const validTypes = ['text/plain', 'text/csv', 'application/csv'];
     if (!validTypes.includes(file.type)) {
       toast({
@@ -41,115 +38,89 @@ const ImportWordsSection: FC = () => {
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       toast({
         title: "File Too Large",
-        description: "Please select a file smaller than 5MB.",
+        description: `Please select a file smaller than ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB.`,
         variant: "destructive",
       });
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    
     setSelectedFile(file);
   }, [toast]);
 
-  const parseWords = useCallback((text: string): string[] => {
-    // Detect format - CSV or simple text
-    const isCSV = text.includes(',');
-    let words: string[] = [];
-    
-    if (isCSV) {
-      // Handle CSV with possible quotes
-      const rows = text.split(/\r?\n/);
-      for (const row of rows) {
-        // Basic CSV parsing (handles simple quotes)
-        const matches = row.match(/(?:"([^"]*)")|([^,]+)/g);
-        if (matches) {
-          words.push(...matches.map(m => 
-            m.startsWith('"') && m.endsWith('"') 
-              ? m.slice(1, -1).trim() 
-              : m.trim()
-          ));
+  const parseWordsFromFile = useCallback((text: string): string[] => {
+    const lines = text.split(/\r?\n/);
+    let parsedWords: string[] = [];
+
+    lines.forEach(line => {
+      // Simple CSV detection: if it contains a comma, split by comma, otherwise treat as single word
+      const potentialWords = line.includes(',') ? line.split(',') : [line];
+      potentialWords.forEach(potentialWord => {
+        // Remove quotes if they exist (e.g., "word" -> word)
+        const cleanedWord = potentialWord.replace(/^"(.*)"$/, '$1').trim();
+        if (cleanedWord && cleanedWord.length > 0 && cleanedWord.length <= MAX_WORD_LENGTH_IMPORT) {
+          // Basic sanitization: allow letters, numbers, spaces, hyphens, apostrophes
+          const sanitizedWord = cleanedWord.replace(/[^\p{L}\p{N}\s'-]/gu, '').trim();
+          if (sanitizedWord) {
+            parsedWords.push(sanitizedWord);
+          }
         }
-      }
-    } else {
-      // Handle simple newline-separated list
-      words = text.split(/\r?\n/).map(word => word.trim());
-    }
-    
-    // Filter empty words and sanitize input
-    return words
-      .filter(word => word && word.length > 0 && word.length <= 100) // Reasonable max word length
-      .map(word => word.replace(/[^\p{L}\p{N}\s'-]/gu, '')) // Keep only letters, numbers, spaces, hyphens and apostrophes
-      .slice(0, MAX_WORDS); // Limit max words
+      });
+    });
+    return Array.from(new Set(parsedWords)).slice(0, MAX_WORDS_TO_PROCESS_AT_ONCE); // Unique and limit
   }, []);
+
 
   const handleImport = useCallback(async () => {
     if (!selectedFile) {
-      toast({
-        title: "No File Selected",
-        description: "Please select a file to import.",
-        variant: "destructive",
-      });
+      toast({ title: "No File Selected", description: "Please select a file to import.", variant: "destructive" });
       return;
     }
-
     setIsProcessing(true);
+    let wordsToAdd: string[] = [];
+    let processedCount = 0;
+    let skippedDuplicateCount = 0;
 
     try {
-      const text = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target?.result as string || '');
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsText(selectedFile);
-      });
+      const text = await selectedFile.text();
+      const parsedWords = parseWordsFromFile(text);
+      processedCount = parsedWords.length;
 
-      if (!text) {
-        throw new Error('Empty file');
-      }
-
-      const wordsArray = parseWords(text);
-
-      if (wordsArray.length === 0) {
-        toast({
-          title: "No Words Found",
-          description: "No valid words found in the file.",
-          variant: "destructive",
-        });
+      if (processedCount === 0) {
+        toast({ title: "No Valid Words Found", description: "The file did not contain any processable words.", variant: "destructive" });
+        setIsProcessing(false);
         return;
       }
+
+      const existingLibraryTexts = new Set(libraryWords.map(w => w.text.toLowerCase()));
       
-      // Process words in smaller batches if large file
-      const BATCH_SIZE = 500;
-      if (wordsArray.length > BATCH_SIZE) {
-        // Process in chunks to avoid UI freezing
-        for (let i = 0; i < wordsArray.length; i += BATCH_SIZE) {
-          const chunk = wordsArray.slice(i, i + BATCH_SIZE);
-          await new Promise<void>(resolve => {
-            setTimeout(() => {
-              addWordsBatch(chunk);
-              resolve();
-            }, 0);
-          });
-        }
-      } else {
-        addWordsBatch(wordsArray);
-      }
-      
-      toast({
-        title: "Import Successful",
-        description: `${wordsArray.length} words processed for import.`,
+      wordsToAdd = parsedWords.filter(word => {
+        const isDuplicate = existingLibraryTexts.has(word.toLowerCase());
+        if (isDuplicate) skippedDuplicateCount++;
+        return !isDuplicate;
       });
-      
+
+      if (wordsToAdd.length > 0) {
+        const addedCount = await addWordsBatch(wordsToAdd);
+        toast({
+          title: "Import Complete",
+          description: `${addedCount} new word(s) added. ${skippedDuplicateCount} word(s) skipped as duplicates. ${processedCount - wordsToAdd.length - skippedDuplicateCount} word(s) were invalid or already duplicates within the file.`,
+        });
+      } else {
+        toast({
+          title: "No New Words to Add",
+          description: `All ${processedCount} word(s) from the file were already in your library or duplicates within the file.`,
+        });
+      }
+
     } catch (error) {
       console.error('Import error:', error);
       toast({
         title: "Import Failed",
-        description: error instanceof Error ? error.message : "Failed to process file.",
+        description: error instanceof Error ? error.message : "An unknown error occurred while processing the file.",
         variant: "destructive",
       });
     } finally {
@@ -159,16 +130,16 @@ const ImportWordsSection: FC = () => {
         fileInputRef.current.value = "";
       }
     }
-  }, [selectedFile, toast, parseWords, addWordsBatch]);
+  }, [selectedFile, toast, parseWordsFromFile, addWordsBatch, libraryWords]);
 
   return (
     <Card className="shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Import Words</CardTitle>
-        <CardDescription>Upload a .txt or .csv file with words (one per line or comma-separated).</CardDescription>
+        <CardDescription>Upload a .txt or .csv file. Words can be one per line or comma-separated.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <Input
             id="file-upload"
             type="file"
@@ -179,24 +150,24 @@ const ImportWordsSection: FC = () => {
             aria-label="Word import file chooser"
             disabled={isProcessing}
           />
-          <Button 
-            variant="outline" 
-            onClick={() => fileInputRef.current?.click()} 
-            className="flex-shrink-0"
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-shrink-0 w-full sm:w-auto"
             disabled={isProcessing}
           >
             <FileText className="mr-2 h-4 w-4" />
             Choose File
           </Button>
           {selectedFile && (
-            <span className="text-sm text-muted-foreground truncate">
+            <span className="text-sm text-muted-foreground truncate mt-2 sm:mt-0">
               {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
             </span>
           )}
         </div>
-        <Button 
-          onClick={handleImport} 
-          disabled={!selectedFile || isProcessing} 
+        <Button
+          onClick={handleImport}
+          disabled={!selectedFile || isProcessing}
           className="w-full sm:w-auto"
         >
           {isProcessing ? (
@@ -216,4 +187,4 @@ const ImportWordsSection: FC = () => {
   );
 };
 
-export default ImportWordsSection;
+export default React.memo(ImportWordsSection);
