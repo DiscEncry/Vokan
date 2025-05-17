@@ -31,3 +31,11 @@ export interface GeneratedWordDetails {
   details: string; // The AI-generated block of text with markdown.
 }
 
+export type ValidateWordStatus = 'valid' | 'not_found' | 'api_error' | 'invalid_input';
+
+export interface ValidateWordResult {
+  word: string;
+  status: ValidateWordStatus;
+  message: string;
+  apiResponse?: any; // Optional: include raw API response for debugging
+}
