@@ -55,33 +55,33 @@ body {
   }
 
   .dark {
-    --background: 240 10% 3.9%; /* Dark Blue-Gray */
-    --foreground: 0 0% 98%; /* Light Gray/White */
+    --background: 220 13% 10%; /* Dark Slate Blue */
+    --foreground: 220 15% 95%; /* Very Light Cool Gray */
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 220 13% 15%; /* Slightly Lighter Slate Blue for cards */
+    --card-foreground: 220 15% 95%;
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 220 13% 12%; /* Slightly darker than card, distinct from main bg */
+    --popover-foreground: 220 15% 95%;
 
-    --primary: 180 90% 45%; /* Brighter Teal for Dark Mode */
-    --primary-foreground: 180 20% 96%; /* Light Cyan/White */
+    --primary: 180 80% 40%; /* Slightly deeper teal */
+    --primary-foreground: 180 100% 97%; /* Very light cyan for primary text */
 
-    --secondary: 240 3.7% 15.9%; /* Darker Gray */
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 13% 22%; /* Lighter slate for secondary elements */
+    --secondary-foreground: 220 10% 85%; /* Readable cool gray for secondary text */
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%; /* Lighter Medium Gray */
+    --muted: 220 13% 22%; /* Same as secondary */
+    --muted-foreground: 220 10% 60%; /* Muted grayish blue */
 
-    --accent: 180 70% 40%; /* Medium Teal */
-    --accent-foreground: 0 0% 98%;
+    --accent: 180 60% 50%; /* Brighter teal for accents, from light theme */
+    --accent-foreground: 210 40% 98%; /* Almost white for accent text */
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 70% 50%; /* More visible red */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 180 90% 45%; /* Brighter Teal for Rings */
+    --border: 220 13% 25%; /* Subtly visible border */
+    --input: 220 13% 20%; /* Input background, similar to secondary */
+    --ring: 180 70% 55%; /* Brighter teal for focus rings */
     
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -89,14 +89,14 @@ body {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 180 90% 45%;
-    --sidebar-primary-foreground: 180 20% 96%;
-    --sidebar-accent: 180 70% 25%; /* Darker Teal accent for sidebar */
-    --sidebar-accent-foreground: 0 0% 95%; 
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 180 90% 45%;
+    --sidebar-background: 220 13% 12%; /* Dark slate, consistent with popovers */
+    --sidebar-foreground: 220 15% 80%; /* Readable sidebar text */
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: 220 13% 20%; /* Subtle hover, similar to input bg */
+    --sidebar-accent-foreground: 220 15% 95%; /* Light text on sidebar accent */
+    --sidebar-border: 220 13% 18%; /* Slightly visible border for sidebar sections */
+    --sidebar-ring: var(--ring);
   }
 }
 
