@@ -64,12 +64,13 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame }) => {
     };
   }, []);
 
-  // Reset focused option index when a new question loads
+  // Reset focused option index when attempting answers
   useEffect(() => {
-    if (!isLoadingCurrentQuestion && currentQuestion) {
+    // Reset focused option index when a new question loads or answer is selected
+    if (selectedAnswer || (!isLoadingCurrentQuestion && currentQuestion)) {
       setFocusedOptionIndex(-1);
     }
-  }, [isLoadingCurrentQuestion, currentQuestion]);
+  }, [isLoadingCurrentQuestion, currentQuestion, selectedAnswer]);
 
   /**
    * Select a target word for the question, excluding any specified word ID
@@ -417,33 +418,92 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame }) => {
         // Get current screen width to determine layout
         const isSmallScreen = window.innerWidth < 640; // sm breakpoint in tailwind is 640px
         
+        // Helper function to check if an option is selectable
+        const isOptionSelectable = (index: number) => {
+          if (index < 0 || index >= optionsCount) return false;
+          const option = currentQuestion.options[index];
+          const isAttemptedIncorrect = attemptedAnswers.includes(option) && option !== currentQuestion.correctAnswer;
+          return !isAttemptedIncorrect;
+        };
+        
+        // Find the next selectable option in a specific direction
+        const findNextSelectableOption = (startIndex: number, direction: 'up' | 'down' | 'left' | 'right') => {
+          let candidateIndex = startIndex;
+          
+          // Try to find the next selectable option based on direction
+          if (isSmallScreen) {
+            // Single column layout logic
+            if (direction === 'up') {
+              for (let i = candidateIndex - 1; i >= 0; i--) {
+                if (isOptionSelectable(i)) return i;
+              }
+            } else if (direction === 'down') {
+              for (let i = candidateIndex + 1; i < optionsCount; i++) {
+                if (isOptionSelectable(i)) return i;
+              }
+            }
+          } else {
+            // Two-column layout logic
+            if (direction === 'up') {
+              candidateIndex = candidateIndex - 2;
+              if (isOptionSelectable(candidateIndex)) return candidateIndex;
+            } else if (direction === 'down') {
+              candidateIndex = candidateIndex + 2;
+              if (isOptionSelectable(candidateIndex)) return candidateIndex;
+            } else if (direction === 'left') {
+              if (candidateIndex % 2 === 1) { // If in right column
+                candidateIndex = candidateIndex - 1;
+                if (isOptionSelectable(candidateIndex)) return candidateIndex;
+              }
+            } else if (direction === 'right') {
+              if (candidateIndex % 2 === 0 && candidateIndex + 1 < optionsCount) { // If in left column
+                candidateIndex = candidateIndex + 1;
+                if (isOptionSelectable(candidateIndex)) return candidateIndex;
+              }
+            }
+          }
+          
+          // Return the original index if no selectable option is found
+          return -1;
+        };
+        
+        // Process arrow key navigation
         if (isSmallScreen) {
-          // For single column layout (mobile)
           if (e.key === 'ArrowUp') {
-            newIndex = focusedOptionIndex > 0 ? focusedOptionIndex - 1 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'up');
+            if (nextIndex !== -1) newIndex = nextIndex;
           } else if (e.key === 'ArrowDown') {
-            newIndex = focusedOptionIndex < optionsCount - 1 ? focusedOptionIndex + 1 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'down');
+            if (nextIndex !== -1) newIndex = nextIndex;
           }
         } else {
-          // For two-column layout (desktop/tablet)
           if (e.key === 'ArrowUp') {
-            newIndex = (focusedOptionIndex >= 2) ? focusedOptionIndex - 2 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'up');
+            if (nextIndex !== -1) newIndex = nextIndex;
           } else if (e.key === 'ArrowDown') {
-            newIndex = (focusedOptionIndex < 2 && focusedOptionIndex + 2 < optionsCount) ? focusedOptionIndex + 2 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'down');
+            if (nextIndex !== -1) newIndex = nextIndex;
           } else if (e.key === 'ArrowLeft') {
-            newIndex = (focusedOptionIndex % 2 === 1) ? focusedOptionIndex - 1 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'left');
+            if (nextIndex !== -1) newIndex = nextIndex;
           } else if (e.key === 'ArrowRight') {
-            newIndex = (focusedOptionIndex % 2 === 0 && focusedOptionIndex + 1 < optionsCount) ? focusedOptionIndex + 1 : focusedOptionIndex;
+            const nextIndex = findNextSelectableOption(focusedOptionIndex, 'right');
+            if (nextIndex !== -1) newIndex = nextIndex;
           }
         }
         
-        // If no option is focused yet, start with the first one
+        // If no option is focused yet, find the first selectable option
         if (focusedOptionIndex === -1) {
-          newIndex = 0;
+          for (let i = 0; i < optionsCount; i++) {
+            if (isOptionSelectable(i)) {
+              newIndex = i;
+              break;
+            }
+          }
         }
         
-        // Make sure the index is valid
-        if (newIndex >= 0 && newIndex < optionsCount) {
+        // Make sure the index is valid and the option is selectable
+        if (newIndex >= 0 && newIndex < optionsCount && isOptionSelectable(newIndex)) {
           setFocusedOptionIndex(newIndex);
           // Focus the button element
           optionButtonsRef.current[newIndex]?.focus();
@@ -551,12 +611,12 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame }) => {
                     buttonVariant = isCorrect ? 'default' : 'destructive';
                   }
                   
-                  let buttonClass = `text-base py-5 transition-all duration-200 ease-in-out transform focus:ring-2 focus:ring-primary
+                  let buttonClass = `text-base py-5 transition-all duration-200 ease-in-out transform
                     ${isSelected && isCorrect ? 'bg-green-500 hover:bg-green-600 border-green-500 text-white animate-pulse' : ''}
                     ${isSelected && !isCorrect ? 'bg-red-500 hover:bg-red-600 border-red-500 text-white' : ''}
                     ${isAttemptedIncorrect && !isCorrect ? 'opacity-60 line-through' : ''}
-                    ${isFocused ? 'ring ring-primary ring-offset-2' : ''}
-                    ${isCorrect ? 'hover:scale-100' : 'hover:scale-105'}`;
+                    ${isFocused && !isDisabled ? 'ring ring-primary ring-offset-2' : ''}
+                    ${isCorrect ? 'hover:scale-100' : (isDisabled ? 'hover:scale-100' : 'hover:scale-105')}`;
                   
                   return (
                     <Button
@@ -565,7 +625,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame }) => {
                       size="lg"
                       className={buttonClass}
                       onClick={() => handleAnswerSubmit(option)}
-                      onFocus={() => setFocusedOptionIndex(index)}
+                      onFocus={() => !isDisabled && setFocusedOptionIndex(index)}
                       ref={el => { optionButtonsRef.current[index] = el; }}
                       disabled={isDisabled}
                       aria-label={`Option ${index + 1}: ${option}`}
