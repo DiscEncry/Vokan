@@ -1,10 +1,10 @@
 
-// This file is no longer needed as the validation system has been removed.
+// This file is no longer needed as validation is now client-side using local word chunks.
 // Please delete this file from your project.
 // 'use server';
 //
-// import { checkDictionaryWord, type DictionaryAPIResponse } from '@/ai/tools/dictionary-tool';
-// import type { ValidateWordResult } from '@/types';
+// import { checkDictionaryWord } from '@/ai/tools/dictionary-tool';
+// import type { ValidateWordResult, DictionaryAPIResponse } from '@/types';
 //
 // export async function validateWord(word: string): Promise<ValidateWordResult> {
 //   const trimmedWord = word.trim();
@@ -16,8 +16,7 @@
 //       message: 'Word cannot be empty.',
 //     };
 //   }
-//   // Basic regex for common English words (alphabetic, hyphens, apostrophes)
-//   // This is a loose check.
+//
 //   if (!/^[a-zA-Z'-]+$/.test(trimmedWord)) {
 //     return {
 //       word: trimmedWord,
@@ -43,7 +42,6 @@
 //       apiResponse: result.error
 //     };
 //   } else {
-//     // Includes other API errors or internal errors from checkDictionaryWord
 //     return {
 //       word: trimmedWord,
 //       status: 'api_error',
