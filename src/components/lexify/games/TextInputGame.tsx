@@ -19,7 +19,7 @@ interface TextInputGameProps {
   onStopGame: () => void;
 }
 
-const DEBUG = true; // Set to false in production
+const DEBUG = false; // Set to false in production
 
 const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   const { words: allLibraryWords, updateWordFamiliarity, isLoading: vocabLoading } = useVocabulary();
@@ -69,7 +69,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
 
   const hasEnoughWords = libraryWords.length > 0;
 
-  // Helper for safe state updates
   const safeSetState = useCallback(<T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T | ((prev: T) => T)) => {
     if (isMounted.current) {
       setter(value);
@@ -118,7 +117,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   
     setAllLoadingStates(false);
     isLoadingTransition.current = false;
-  }, [isMounted, resetQuestionState, safeSetState, setAllLoadingStates, debugLog]);
+  }, [resetQuestionState, safeSetState, setAllLoadingStates, debugLog]);
 
 
   useEffect(() => {
@@ -183,8 +182,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     try {
       const aiInput = { word: targetWord.text };
       debugLog("Calling generateTextInputQuestion with:", aiInput);
-      // The AI flow itself handles the abort signal if it's designed to.
-      // Genkit's underlying fetch might use it.
       const questionData = await generateTextInputQuestion(aiInput); 
       debugLog("AI response for text input question:", questionData);
       
@@ -203,8 +200,8 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
         return null;
       }
-      if (!questionData.correctAnswer && !questionData.targetWord) { // AI schema uses targetWord for the blanked word
-        debugLog("localGenerateSingleQuestion: Missing correctAnswer/targetWord from AI response.");
+      if (!questionData.targetWord) { 
+        debugLog("localGenerateSingleQuestion: Missing targetWord from AI response.");
         if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
         return null;
       }
@@ -218,7 +215,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       return {
         sentenceWithBlank: questionData.sentenceWithBlank,
         translatedHint: questionData.translatedHint,
-        correctAnswer: questionData.targetWord || questionData.correctAnswer, // Use targetWord from AI schema first
+        correctAnswer: questionData.targetWord, 
         targetWord: targetWord.text, 
       };
     } catch (error) {
@@ -234,7 +231,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         }
       } else {
         debugLog("Unknown error in localGenerateSingleQuestion:", error);
-        if (isMounted.current) {
+         if (isMounted.current) {
             toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
             safeSetState(setAiFailureCount, prev => prev + 1);
         }
@@ -256,7 +253,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     debugLog("No valid cache for:", wordText, "- Fetching from AI.");
     safeSetState(setLoadingState, true);
     try {
-      // The AI flow itself handles the abort signal if it's designed to.
       const detailsData = await generateWordDetails({ word: wordText });
       debugLog("AI response for word details:", detailsData);
 
@@ -350,8 +346,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     } finally {
       if (isMounted.current) {
         safeSetState(setIsLoadingNextQuestion, false);
-        // If isLoadingNextDetails was managed by fetchDetailsWithCache, it should already be false.
-        // This ensures it's false if the path to call fetchDetailsWithCache was not taken.
         if (!nextQuestion && !isLoadingNextDetails) {
             safeSetState(setIsLoadingNextDetails, false);
         }
@@ -392,10 +386,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       if (!initialTargetWord) {
         debugLog("initializeGame: No target word found for initial question.");
         safeSetState(setCurrentQuestion, null);
-         if (isMounted.current && !vocabLoading) { // only toast if vocab is loaded and still no words
+         if (isMounted.current && !vocabLoading) {
           toast({ title: "No Words Available", description: "Add 'Familiar' or 'Mastered' words to your library.", variant: "destructive" });
         }
-        return; // Exit finally will handle cleanup
+        return;
       }
       debugLog("initializeGame: Selected initial target word:", initialTargetWord.text);
       
@@ -418,7 +412,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         debugLog("initializeGame: Failed to generate initial question (null or timeout).");
         if (isMounted.current) {
           toast({ title: "Question Generation Failed", description: "Could not create the first question. Please try resetting.", variant: "destructive" });
-          safeSetState(setCurrentQuestion, null); // Ensure it's null if generation failed
+          safeSetState(setCurrentQuestion, null);
         }
         return;
       }
@@ -428,7 +422,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       
       let details = null;
       if (question.targetWord) {
-        safeSetState(setIsLoadingDetails, true); // setLoadingState directly
+        safeSetState(setIsLoadingDetails, true);
         details = await fetchDetailsWithCache(question.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
         if (isMounted.current) {
           safeSetState(setWordDetails, details);
@@ -453,7 +447,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
           toast({ title: "Initialization Failed", description: "An unknown error occurred. Please try resetting.", variant: "destructive" });
         }
       }
-      safeSetState(setCurrentQuestion, null); // Ensure currentQuestion is null on error
+      safeSetState(setCurrentQuestion, null);
     } finally {
       if (isMounted.current) {
         safeSetState(setIsLoadingCurrentQuestion, false);
@@ -467,7 +461,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     debugLog("handleNextQuestion: Starting. isLoadingTransition:", isLoadingTransition.current);
     debugLog("[State Debug]:", { isLoadingCurrentQuestion, isLoadingNextQuestion, currentQuestion: Boolean(currentQuestion), nextQuestion: Boolean(nextQuestion), isLoadingTransition: isLoadingTransition.current });
 
-    if (isLoadingTransition.current || !isMounted.current) return;
+    if (isLoadingTransition.current || !isMounted.current) {
+        debugLog("handleNextQuestion: Bailing early - transition in progress or unmounted.");
+        return;
+    }
     
     isLoadingTransition.current = true;
     
@@ -475,7 +472,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     safeSetState(setIsLoadingCurrentQuestion, true);
     safeSetState(setWordDetails, null); 
     
-    // Abort controllers for the *new* current question fetch (if needed)
     if (currentQuestionAbortController.current) currentQuestionAbortController.current.abort("Advancing to next question");
     currentQuestionAbortController.current = new AbortController();
     if (wordDetailsAbortController.current) wordDetailsAbortController.current.abort("Advancing to next question for details");
@@ -485,9 +481,9 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       if (nextQuestion && nextQuestion.correctAnswer) { 
         debugLog("handleNextQuestion: Using pre-fetched nextQuestion:", nextQuestion.targetWord);
         safeSetState(setCurrentQuestion, nextQuestion);
-        safeSetState(setWordDetails, nextWordDetails); // Use pre-fetched details too
+        safeSetState(setWordDetails, nextWordDetails); 
         
-        if (!nextWordDetails && nextQuestion.targetWord) { // If details for next question weren't ready, fetch them now
+        if (!nextWordDetails && nextQuestion.targetWord) {
             debugLog("handleNextQuestion: Pre-fetched details were not ready for", nextQuestion.targetWord, "fetching now.");
             safeSetState(setIsLoadingDetails, true);
             const d = await fetchDetailsWithCache(nextQuestion.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
@@ -496,10 +492,9 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         
         safeSetState(setNextQuestion, null); 
         safeSetState(setNextWordDetails, null);
-        fetchAndStoreNextQuestionAndDetails(); // Start fetching the *new* next question
+        fetchAndStoreNextQuestionAndDetails();
       } else {
         debugLog("handleNextQuestion: No valid pre-fetched nextQuestion. Generating one now.");
-        // Ensure next loading states are false as we are consuming/regenerating current, not waiting for next
         safeSetState(setIsLoadingNextQuestion, false);
         safeSetState(setIsLoadingNextDetails, false);
 
@@ -584,10 +579,13 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       toast({ title: "Correct!", description: `"${currentQuestion.correctAnswer}" is right!`, className: "bg-green-500 text-white" });
       if (targetWordObject) {
         let newFamiliarity: FamiliarityLevel = targetWordObject.familiarity;
-        if (currentAttempts === 1 && !hintUsedThisTurn) {
+        if (currentAttempts === 1 && !hintUsedThisTurn) { // Correct on first try without hint
           if (targetWordObject.familiarity === 'Familiar') newFamiliarity = 'Mastered';
-        } else { 
+          // If already Mastered, it stays Mastered
+        } else { // Correct, but used hint or took multiple tries
           if (targetWordObject.familiarity === 'Mastered') newFamiliarity = 'Familiar';
+          // If Familiar, it stays Familiar. If Learning, it also stays Learning or could be promoted to Familiar here.
+          // For simplicity, if not first try/no hint, we just ensure it's not demoted below Familiar if it was Mastered.
         }
         if (newFamiliarity !== targetWordObject.familiarity) {
             debugLog("handleSubmit (Correct): Updating familiarity for", targetWordObject.text, "from", targetWordObject.familiarity, "to", newFamiliarity);
@@ -601,6 +599,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         let newFamiliarity: FamiliarityLevel = targetWordObject.familiarity;
         if (targetWordObject.familiarity === 'Mastered') newFamiliarity = 'Familiar';
         else if (targetWordObject.familiarity === 'Familiar') newFamiliarity = 'Learning';
+        // If already Learning, it stays Learning. New words don't play this game.
         if (newFamiliarity !== targetWordObject.familiarity) {
             debugLog("handleSubmit (Incorrect): Updating familiarity for", targetWordObject.text, "from", targetWordObject.familiarity, "to", newFamiliarity);
             updateWordFamiliarity(targetWordObject.id, newFamiliarity);
@@ -632,12 +631,15 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
             break;
         }
     }
-
+    
     if (firstDiffIndex === -1 && userInput.length === currentQuestion.correctAnswer.length) { 
-        return;
+        return; // Already correct or user typed full word and it's different (will be caught by submit)
     }
     
-    const revealUpToIndex = firstDiffIndex === -1 ? userInput.length + 1 : firstDiffIndex + 1;
+    // If user typed "heofwk" for "hello", firstDiffIndex is 2 ('o'). We reveal "hel".
+    // If user typed "he" for "hello", firstDiffIndex is 2 (next empty char). We reveal "hel".
+    const revealUpToIndex = firstDiffIndex === -1 ? currentQuestion.correctAnswer.length : firstDiffIndex + 1;
+
     if (revealUpToIndex > currentQuestion.correctAnswer.length) {
       debugLog("revealHint: Cannot reveal beyond correct answer length.");
       return;
@@ -660,11 +662,9 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   const handleHiddenInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isCorrect !== null) return; 
     const value = e.target.value;
-    // Allow input only up to the length of the correct answer
     if (currentQuestion && value.length <= currentQuestion.correctAnswer.length) {
       safeSetState(setUserInput, value);
     } else if (currentQuestion && value.length > currentQuestion.correctAnswer.length) {
-      // If user tries to type beyond, keep input at max length
       safeSetState(setUserInput, value.substring(0, currentQuestion.correctAnswer.length));
     }
   };
@@ -683,29 +683,30 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     for (let i = 0; i < correctAnswerChars.length; i++) {
       const typedChar = userInput[i];
       let charToDisplay = '_';
-      let charColor = 'text-foreground';
-      let borderColor = 'border-muted-foreground';
+      let charColor = 'text-foreground'; // Default placeholder color
+      let borderColor = 'border-muted-foreground'; // Default placeholder border
   
       if (showCorrectAnswer) { // After submission (correct or incorrect)
         charToDisplay = correctAnswerChars[i];
-        if (isCorrect) { // If the whole answer was correct
+        if (isCorrect) { 
             charColor = 'text-green-500 dark:text-green-400';
             borderColor = 'border-green-500 dark:border-green-400';
-        } else { // If submission was incorrect
+        } else { 
             if (typedChar?.toLowerCase() === correctAnswerChars[i].toLowerCase()) {
-              charColor = 'text-green-500 dark:text-green-400'; // User got this specific char right
+              charColor = 'text-green-500 dark:text-green-400'; 
               borderColor = 'border-green-500 dark:border-green-400';
-            } else if (typedChar) { // User typed something here, and it was wrong
-              charColor = 'text-red-500 dark:text-red-400'; // Show what user typed, in red
-              charToDisplay = typedChar; // Show user's incorrect char
+            } else if (typedChar) { 
+              charColor = 'text-red-500 dark:text-red-400 line-through'; 
               borderColor = 'border-red-500 dark:border-red-400';
-            } else { // User didn't type this far, show correct char
-              charColor = 'text-orange-500 dark:text-orange-400'; // Correct char that user missed
+              // Display correct char underneath if desired, or just the incorrect one
+              charToDisplay = correctAnswerChars[i]; // Show correct char instead of user's mistake
+            } else { 
+              charColor = 'text-orange-500 dark:text-orange-400'; 
               borderColor = 'border-orange-500 dark:border-orange-400';
             }
         }
       } else if (typedChar) { // While typing, before submission
-        charToDisplay = typedChar; // Show what user typed
+        charToDisplay = typedChar; 
         charColor = isInputCurrentlyCorrectPrefix ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         borderColor = isInputCurrentlyCorrectPrefix ? 'border-green-500 dark:border-green-400' : 'border-red-500 dark:border-red-400';
       }
@@ -725,6 +726,24 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     }
     return <div className="flex flex-wrap justify-center items-center p-2 cursor-text" onClick={() => hiddenInputRef.current?.focus()}>{displaySpans}</div>;
   }, [currentQuestion, userInput, showCorrectAnswer, isCorrect]);
+
+  // Effect for "Next Question" on Space/Enter after correct answer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isCorrect === true && (e.key === ' ' || e.key === 'Enter')) {
+        if (!isLoadingTransition.current && !isLoadingNextQuestion && !isLoadingNextDetails && !isLoadingCurrentQuestion) {
+          e.preventDefault(); // Prevent space from scrolling, etc.
+          handleNextQuestion();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCorrect, handleNextQuestion, isLoadingTransition, isLoadingNextQuestion, isLoadingNextDetails, isLoadingCurrentQuestion]);
+
 
   const renderDebugInfo = useCallback(() => {
     if (!DEBUG) return null;
@@ -753,7 +772,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
             onClick={() => {
               debugLog("Force Reset button clicked");
               resetGame();
-              setTimeout(initializeGame, 100); // Slight delay before re-initializing
+              setTimeout(initializeGame, 100);
             }}
           >
             Force Reset Game
@@ -768,7 +787,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-2">Loading vocabulary...</span></div>;
   }
 
-  if (!hasEnoughWords && !vocabLoading && !gameInitialized) { // Show only if vocab loaded and determined no words
+  if (!hasEnoughWords && !vocabLoading && !gameInitialized) {
     return (
       <Alert variant="default" className="border-primary max-w-md mx-auto">
         <Lightbulb className="h-5 w-5 text-primary" />
@@ -851,7 +870,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
                 }}
                 className="opacity-0 absolute w-0 h-0 pointer-events-none"
                 aria-label="Type the missing word here"
-                maxLength={currentQuestion.correctAnswer.length + 5} // Allow slight overtyping
+                maxLength={currentQuestion.correctAnswer.length + 5} 
                 disabled={isCorrect !== null}
                 autoFocus
               />
@@ -950,3 +969,4 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
 
 TextInputGame.displayName = 'TextInputGame';
 export default TextInputGame;
+
