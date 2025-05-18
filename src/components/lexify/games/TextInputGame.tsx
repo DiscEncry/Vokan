@@ -4,10 +4,9 @@
 import type { FC } from 'react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-// Input component is no longer directly used for visible input
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, XCircle, Lightbulb, RefreshCw, StopCircle, Info, Sparkles, KeyRound, Send } from 'lucide-react'; // Added KeyRound, Send
+import { Loader2, CheckCircle, XCircle, Lightbulb, RefreshCw, StopCircle, Info, Sparkles, KeyRound, Send } from 'lucide-react';
 import WordDetailPanel from './WordDetailPanel';
 import { useVocabulary } from '@/context/VocabularyContext';
 import type { Word, TextInputQuestion, GeneratedWordDetails, FamiliarityLevel } from '@/types';
@@ -20,22 +19,21 @@ interface TextInputGameProps {
   onStopGame: () => void;
 }
 
-const DEBUG = process.env.NODE_ENV === 'development';
-
-const debugLog = (...args: any[]) => {
-  if (DEBUG) console.log("[TextInputGame]", ...args);
-};
+const DEBUG = true; // Set to false in production
 
 const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   const { words: allLibraryWords, updateWordFamiliarity, isLoading: vocabLoading } = useVocabulary();
   const { toast } = useToast();
 
+  const debugLog = useCallback((...args: any[]) => {
+    if (DEBUG) console.log("[TextInputGame]", ...args);
+  }, []);
+
   const libraryWords = React.useMemo(() => {
-    debugLog("Filtering library words. All words count:", allLibraryWords.length);
     const filtered = allLibraryWords.filter(w => w.familiarity === 'Familiar' || w.familiarity === 'Mastered');
-    debugLog("Words with 'Familiar' or 'Mastered' familiarity:", filtered.length, filtered.map(w => `${w.text} (${w.familiarity})`));
+    debugLog("Filtered library words for game. Count:", filtered.length, filtered.map(w => `${w.text} (${w.familiarity})`));
     return filtered;
-  }, [allLibraryWords]);
+  }, [allLibraryWords, debugLog]);
 
   const [currentQuestion, setCurrentQuestion] = useState<TextInputQuestion | null>(null);
   const [nextQuestion, setNextQuestion] = useState<TextInputQuestion | null>(null);
@@ -69,8 +67,59 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   
   const hiddenInputRef = useRef<HTMLInputElement>(null);
 
-
   const hasEnoughWords = libraryWords.length > 0;
+
+  // Helper for safe state updates
+  const safeSetState = useCallback(<T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T | ((prev: T) => T)) => {
+    if (isMounted.current) {
+      setter(value);
+    }
+  }, []);
+  
+  const setAllLoadingStates = useCallback((isLoading: boolean) => {
+    if (!isMounted.current) return;
+    safeSetState(setIsLoadingCurrentQuestion, isLoading);
+    safeSetState(setIsLoadingNextQuestion, isLoading);
+    safeSetState(setIsLoadingDetails, isLoading);
+    safeSetState(setIsLoadingNextDetails, isLoading);
+  }, [safeSetState]);
+
+  const resetQuestionState = useCallback(() => {
+    debugLog("resetQuestionState called");
+    safeSetState(setUserInput, '');
+    safeSetState(setIsCorrect, null);
+    safeSetState(setHintRevealedThisQuestion, false);
+    safeSetState(setHintUsedThisTurn, false);
+    safeSetState(setAttempts, 0);
+    safeSetState(setShowCorrectAnswer, false);
+    safeSetState(setShowDetails, false);
+    if (hiddenInputRef.current) {
+        hiddenInputRef.current.focus();
+    }
+  }, [safeSetState, debugLog]);
+  
+  const resetGame = useCallback(() => {
+    if (!isMounted.current) return;
+    debugLog("resetGame: Resetting all game state and aborting requests.");
+  
+    resetQuestionState();
+    safeSetState(setCurrentQuestion, null);
+    safeSetState(setNextQuestion, null);
+    safeSetState(setWordDetails, null);
+    safeSetState(setNextWordDetails, null);
+    safeSetState(setGameInitialized, false);
+    safeSetState(setAiFailureCount, 0);
+    safeSetState(setShowAiFailureAlert, false);
+  
+    currentQuestionAbortController.current?.abort("Game reset");
+    nextQuestionAbortController.current?.abort("Game reset");
+    wordDetailsAbortController.current?.abort("Game reset");
+    nextWordDetailsAbortController.current?.abort("Game reset");
+  
+    setAllLoadingStates(false);
+    isLoadingTransition.current = false;
+  }, [isMounted, resetQuestionState, safeSetState, setAllLoadingStates, debugLog]);
+
 
   useEffect(() => {
     isMounted.current = true;
@@ -82,48 +131,48 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       wordDetailsAbortController.current?.abort("Component unmount");
       nextWordDetailsAbortController.current?.abort("Component unmount");
     };
-  }, []);
+  }, [debugLog]);
 
   useEffect(() => {
-    // Auto-focus the hidden input when a new question loads and interaction is possible
     if (currentQuestion && !isLoadingCurrentQuestion && isCorrect === null && hiddenInputRef.current) {
       hiddenInputRef.current.focus();
     }
   }, [currentQuestion, isLoadingCurrentQuestion, isCorrect]);
 
-
   const selectTargetWord = useCallback((excludeWordId?: string): Word | null => {
-    debugLog("selectTargetWord called. excludeWordId:", excludeWordId, "Total eligible words:", libraryWords.length);
+    debugLog("selectTargetWord: Called with excludeWordId:", excludeWordId, "Total eligible words in libraryWords:", libraryWords.length);
     if (!hasEnoughWords) {
-      debugLog("selectTargetWord: Not enough words.");
+      debugLog("selectTargetWord: Not enough words (hasEnoughWords is false).");
       return null;
     }
     
     let eligibleForSelection = [...libraryWords];
-    debugLog("Initial eligible words for selection:", eligibleForSelection.map(w => w.text));
+    debugLog("selectTargetWord: Initial eligible for selection count:", eligibleForSelection.length);
 
     if (excludeWordId) {
       eligibleForSelection = eligibleForSelection.filter(w => w.id !== excludeWordId);
-      debugLog("After filtering excludeWordId:", eligibleForSelection.map(w => w.text));
+      debugLog("selectTargetWord: After filtering excludeWordId '" + excludeWordId + "', count:", eligibleForSelection.length);
     }
     
     if (currentQuestion?.targetWord) {
         const currentTargetWordObj = libraryWords.find(w => w.text === currentQuestion.targetWord);
         if (currentTargetWordObj) {
             eligibleForSelection = eligibleForSelection.filter(w => w.id !== currentTargetWordObj.id);
-            debugLog("After filtering currentQuestion.targetWord:", eligibleForSelection.map(w => w.text));
+            debugLog("selectTargetWord: After filtering currentQuestion.targetWord '" + currentQuestion.targetWord + "', count:", eligibleForSelection.length);
         }
     }
 
     if (eligibleForSelection.length === 0) {
-      debugLog("No eligible words after filtering, falling back to any word from libraryWords if available.");
-      return libraryWords.length > 0 ? libraryWords[Math.floor(Math.random() * libraryWords.length)] : null;
+      debugLog("selectTargetWord: No eligible words after filtering. Fallback: Using any word from libraryWords if available.");
+      const fallbackSelected = libraryWords.length > 0 ? libraryWords[Math.floor(Math.random() * libraryWords.length)] : null;
+      debugLog("selectTargetWord: Fallback selected word:", fallbackSelected ? fallbackSelected.text : "None");
+      return fallbackSelected;
     }
     
     const selected = eligibleForSelection[Math.floor(Math.random() * eligibleForSelection.length)];
-    debugLog("Selected word for question:", selected ? selected.text : "None");
+    debugLog("selectTargetWord: Selected word:", selected ? selected.text : "None");
     return selected;
-  }, [libraryWords, currentQuestion, hasEnoughWords]);
+  }, [libraryWords, currentQuestion, hasEnoughWords, debugLog]);
 
   const localGenerateSingleQuestion = useCallback(async (targetWord: Word, abortController: AbortController): Promise<TextInputQuestion | null> => {
     debugLog("localGenerateSingleQuestion for word:", targetWord?.text);
@@ -134,6 +183,8 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     try {
       const aiInput = { word: targetWord.text };
       debugLog("Calling generateTextInputQuestion with:", aiInput);
+      // The AI flow itself handles the abort signal if it's designed to.
+      // Genkit's underlying fetch might use it.
       const questionData = await generateTextInputQuestion(aiInput); 
       debugLog("AI response for text input question:", questionData);
       
@@ -141,33 +192,58 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         debugLog("localGenerateSingleQuestion: Component unmounted during generation.");
         return null;
       }
-      if (!questionData || !questionData.sentenceWithBlank || !questionData.correctAnswer || !questionData.translatedHint) {
-          if (isMounted.current) {
-            debugLog("localGenerateSingleQuestion: AI returned null/undefined or incomplete data.", questionData);
-            setAiFailureCount(prev => prev + 1);
-          }
-          return null;
+      
+      if (!questionData) {
+        debugLog("localGenerateSingleQuestion: AI returned null/undefined.");
+        if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
+        return null;
       }
-      if (isMounted.current) setAiFailureCount(0); 
+      if (!questionData.sentenceWithBlank) {
+        debugLog("localGenerateSingleQuestion: Missing sentenceWithBlank from AI response.");
+        if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
+        return null;
+      }
+      if (!questionData.correctAnswer && !questionData.targetWord) { // AI schema uses targetWord for the blanked word
+        debugLog("localGenerateSingleQuestion: Missing correctAnswer/targetWord from AI response.");
+        if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
+        return null;
+      }
+       if (!questionData.translatedHint) {
+        debugLog("localGenerateSingleQuestion: Missing translatedHint from AI response.");
+        if (isMounted.current) safeSetState(setAiFailureCount, prev => prev + 1);
+        return null;
+      }
+      
+      if (isMounted.current) safeSetState(setAiFailureCount, 0); 
       return {
         sentenceWithBlank: questionData.sentenceWithBlank,
         translatedHint: questionData.translatedHint,
-        correctAnswer: questionData.targetWord, // AI schema uses targetWord for the blanked word
-        targetWord: targetWord.text, // The original word object's text
+        correctAnswer: questionData.targetWord || questionData.correctAnswer, // Use targetWord from AI schema first
+        targetWord: targetWord.text, 
       };
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
-        debugLog("Error in localGenerateSingleQuestion:", error);
-        toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
-        setAiFailureCount(prev => prev + 1);
-      } else if (error instanceof Error && error.name === 'AbortError') {
-        debugLog("localGenerateSingleQuestion: Aborted.");
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          debugLog("localGenerateSingleQuestion: Aborted.");
+        } else {
+          debugLog("Error in localGenerateSingleQuestion:", error, error.message, error.stack);
+          if (isMounted.current) {
+            toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+            safeSetState(setAiFailureCount, prev => prev + 1);
+          }
+        }
+      } else {
+        debugLog("Unknown error in localGenerateSingleQuestion:", error);
+        if (isMounted.current) {
+            toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+            safeSetState(setAiFailureCount, prev => prev + 1);
+        }
       }
       return null;
     }
-  }, [toast]);
+  }, [toast, debugLog, safeSetState]);
 
-  const fetchDetailsWithCache = useCallback(async (wordText: string, abortController: AbortController, setLoadingStateAction: React.Dispatch<React.SetStateAction<boolean>>): Promise<GeneratedWordDetails | null> => {
+  const fetchDetailsWithCache = useCallback(async (wordText: string, abortController: AbortController, setLoadingState: React.Dispatch<React.SetStateAction<boolean>>): Promise<GeneratedWordDetails | null> => {
     debugLog("fetchDetailsWithCache for word:", wordText);
     const normalizedWordText = wordText.toLowerCase();
     if (wordDetailsCache.current.has(normalizedWordText)) {
@@ -177,11 +253,13 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
           return cached;
       }
     }
-    debugLog("No valid cache for:", wordText, "Fetching from AI.");
-    if(isMounted.current) setLoadingStateAction(true);
+    debugLog("No valid cache for:", wordText, "- Fetching from AI.");
+    safeSetState(setLoadingState, true);
     try {
+      // The AI flow itself handles the abort signal if it's designed to.
       const detailsData = await generateWordDetails({ word: wordText });
       debugLog("AI response for word details:", detailsData);
+
       if (!isMounted.current) {
         debugLog("fetchDetailsWithCache: Component unmounted during detail fetch.");
         return null;
@@ -192,55 +270,59 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       }
       return detailsData;
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
-        debugLog("Error in fetchDetailsWithCache:", error);
-        toast({ title: "AI Error", description: "Could not fetch word details.", variant: "destructive" });
-      } else if (error instanceof Error && error.name === 'AbortError') {
-        debugLog("fetchDetailsWithCache: Aborted.");
+       if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          debugLog("fetchDetailsWithCache: Aborted.");
+        } else {
+          debugLog("Error in fetchDetailsWithCache:", error, error.message, error.stack);
+          if (isMounted.current) {
+            toast({ title: "AI Error", description: "Could not fetch word details.", variant: "destructive" });
+          }
+        }
+      } else {
+        debugLog("Unknown error in fetchDetailsWithCache:", error);
+         if (isMounted.current) {
+            toast({ title: "AI Error", description: "Could not fetch word details.", variant: "destructive" });
+        }
       }
-      return { word: wordText, details: `Unable to retrieve full details for "${wordText}" at this time. An error occurred.` };
+      return { word: wordText, details: `Unable to retrieve full details for "${wordText}" at this time due to an error.` };
     } finally {
-      if (isMounted.current) setLoadingStateAction(false);
+      safeSetState(setLoadingState, false);
     }
-  }, [toast]);
+  }, [toast, debugLog, safeSetState]);
 
   const fetchAndStoreNextQuestionAndDetails = useCallback(async () => {
-    debugLog("fetchAndStoreNextQuestionAndDetails: Start. vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "isLoadingTransition:", isLoadingTransition.current, "isLoadingNextQ:", isLoadingNextQuestion, "isLoadingNextD:", isLoadingNextDetails);
+    debugLog("fetchAndStoreNextQuestionAndDetails: Start. Conditions - vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "isLoadingTransition:", isLoadingTransition.current, "isLoadingNextQ:", isLoadingNextQuestion, "isLoadingNextD:", isLoadingNextDetails);
     if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingTransition.current || isLoadingNextQuestion || isLoadingNextDetails) {
-        debugLog("fetchAndStoreNextQuestionAndDetails: Bailing early due to conditions.");
-        if (!hasEnoughWords && isMounted.current && gameInitialized) {
-            toast({ title: "No More Words", description: `You've reviewed all 'Familiar' or 'Mastered' words. Add more or change familiarity!`, variant: "default" });
-        }
-        if(isMounted.current) { // Ensure loaders are off if bailing
-            setIsLoadingNextQuestion(false);
-            setIsLoadingNextDetails(false);
+        debugLog("fetchAndStoreNextQuestionAndDetails: Bailing early due to unmet conditions.");
+        if(isMounted.current) {
+            safeSetState(setIsLoadingNextQuestion, false);
+            safeSetState(setIsLoadingNextDetails, false);
         }
         return;
     }
 
-    if(isMounted.current) {
-        setIsLoadingNextQuestion(true);
-        setIsLoadingNextDetails(true); 
-        setNextQuestion(null);
-        setNextWordDetails(null);
-    }
+    safeSetState(setIsLoadingNextQuestion, true);
+    safeSetState(setIsLoadingNextDetails, true); 
+    safeSetState(setNextQuestion, null);
+    safeSetState(setNextWordDetails, null);
     
-    nextQuestionAbortController.current?.abort("New next question fetch started");
+    if (nextQuestionAbortController.current) nextQuestionAbortController.current.abort("New next question fetch started");
     nextQuestionAbortController.current = new AbortController();
-    nextWordDetailsAbortController.current?.abort("New next details fetch started");
+    if (nextWordDetailsAbortController.current) nextWordDetailsAbortController.current.abort("New next details fetch started");
     nextWordDetailsAbortController.current = new AbortController();
 
     const currentTargetWordId = currentQuestion ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined;
     const nextTargetWordObj = selectTargetWord(currentTargetWordId);
-    debugLog("fetchAndStoreNextQuestionAndDetails: Next target word object:", nextTargetWordObj);
+    debugLog("fetchAndStoreNextQuestionAndDetails: Next target word object:", nextTargetWordObj ? nextTargetWordObj.text : "None");
 
     if (!nextTargetWordObj) {
       if (hasEnoughWords && isMounted.current) {
-        toast({ title: "No more unique words", description: "You've cycled through all available 'Familiar' or 'Mastered' words for now!", variant: "default" });
+        toast({ title: "No More Words", description: "You've reviewed all 'Familiar' or 'Mastered' words for now.", variant: "default" });
       }
       if (isMounted.current) {
-        setIsLoadingNextQuestion(false);
-        setIsLoadingNextDetails(false);
+        safeSetState(setIsLoadingNextQuestion, false);
+        safeSetState(setIsLoadingNextDetails, false);
       }
       return;
     }
@@ -248,222 +330,252 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     try {
       const question = await localGenerateSingleQuestion(nextTargetWordObj, nextQuestionAbortController.current);
       if (isMounted.current && question) {
-        setNextQuestion(question); 
+        safeSetState(setNextQuestion, question); 
         const details = await fetchDetailsWithCache(question.targetWord, nextWordDetailsAbortController.current, setIsLoadingNextDetails);
         if (isMounted.current) {
-          setNextWordDetails(details); 
+          safeSetState(setNextWordDetails, details); 
         }
       } else if (isMounted.current) {
-         setNextQuestion(null);
-         setNextWordDetails(null);
-         if(isMounted.current) setIsLoadingNextDetails(false); 
+         safeSetState(setNextQuestion, null);
+         safeSetState(setNextWordDetails, null);
+         safeSetState(setIsLoadingNextDetails, false); 
       }
     } catch (error) {
        if(isMounted.current) {
-          debugLog("Error in fetchAndStoreNextQuestionAndDetails catch block: ", error);
-          setNextQuestion(null);
-          setNextWordDetails(null);
-          setIsLoadingNextDetails(false);
+          debugLog("Error in fetchAndStoreNextQuestionAndDetails general catch block: ", error);
+          safeSetState(setNextQuestion, null);
+          safeSetState(setNextWordDetails, null);
+          safeSetState(setIsLoadingNextDetails, false);
        }
     } finally {
       if (isMounted.current) {
-        setIsLoadingNextQuestion(false);
-        if(!nextQuestion && !nextWordDetails && !isLoadingNextDetails) { 
-            setIsLoadingNextDetails(false);
+        safeSetState(setIsLoadingNextQuestion, false);
+        // If isLoadingNextDetails was managed by fetchDetailsWithCache, it should already be false.
+        // This ensures it's false if the path to call fetchDetailsWithCache was not taken.
+        if (!nextQuestion && !isLoadingNextDetails) {
+            safeSetState(setIsLoadingNextDetails, false);
         }
       }
     }
-  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast, isLoadingNextDetails, isLoadingNextQuestion, gameInitialized]);
-
-  const resetQuestionState = useCallback(() => {
-    debugLog("resetQuestionState called");
-    setUserInput('');
-    setIsCorrect(null);
-    setHintRevealedThisQuestion(false);
-    setHintUsedThisTurn(false);
-    setAttempts(0);
-    setShowCorrectAnswer(false);
-    setShowDetails(false);
-    if (hiddenInputRef.current) {
-        hiddenInputRef.current.focus();
+  }, [vocabLoading, hasEnoughWords, selectTargetWord, currentQuestion, libraryWords, localGenerateSingleQuestion, fetchDetailsWithCache, toast, isLoadingNextDetails, isLoadingNextQuestion, debugLog, safeSetState]);
+  
+  const initializeGame = useCallback(async () => {
+    debugLog("initializeGame: Starting. vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "isLoadingTransition:", isLoadingTransition.current);
+    debugLog("[State Debug]:", { isLoadingCurrentQuestion, isLoadingNextQuestion, currentQuestion: Boolean(currentQuestion), nextQuestion: Boolean(nextQuestion), isLoadingTransition: isLoadingTransition.current });
+  
+    if (isLoadingTransition.current || !hasEnoughWords) {
+      debugLog("initializeGame: Exiting early - transition in progress or no words.");
+      if (!hasEnoughWords && !vocabLoading && isMounted.current) {
+        toast({ 
+          title: "No Words Available", 
+          description: "You need at least one 'Familiar' or 'Mastered' word to play.", 
+          variant: "destructive" 
+        });
+      }
+      return;
     }
-  }, []);
+    
+    isLoadingTransition.current = true;
+    
+    resetQuestionState();
+    safeSetState(setIsLoadingCurrentQuestion, true);
+    safeSetState(setWordDetails, null);
+    
+    if (currentQuestionAbortController.current) currentQuestionAbortController.current.abort("New initialization");
+    currentQuestionAbortController.current = new AbortController();
+    
+    if (wordDetailsAbortController.current) wordDetailsAbortController.current.abort("New initialization");
+    wordDetailsAbortController.current = new AbortController();
+    
+    try {
+      const initialTargetWord = selectTargetWord();
+      if (!initialTargetWord) {
+        debugLog("initializeGame: No target word found for initial question.");
+        safeSetState(setCurrentQuestion, null);
+         if (isMounted.current && !vocabLoading) { // only toast if vocab is loaded and still no words
+          toast({ title: "No Words Available", description: "Add 'Familiar' or 'Mastered' words to your library.", variant: "destructive" });
+        }
+        return; // Exit finally will handle cleanup
+      }
+      debugLog("initializeGame: Selected initial target word:", initialTargetWord.text);
+      
+      let timeoutId: NodeJS.Timeout | null = null;
+      const questionGenPromise = localGenerateSingleQuestion(initialTargetWord, currentQuestionAbortController.current);
+      const timeoutPromise = new Promise<null>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Question generation timed out (10s)")), 10000);
+      });
+  
+      const question = await Promise.race([questionGenPromise, timeoutPromise]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+      
+      if (!isMounted.current) {
+        debugLog("initializeGame: Component unmounted during question generation.");
+        return;
+      }
+      
+      if (!question) {
+        debugLog("initializeGame: Failed to generate initial question (null or timeout).");
+        if (isMounted.current) {
+          toast({ title: "Question Generation Failed", description: "Could not create the first question. Please try resetting.", variant: "destructive" });
+          safeSetState(setCurrentQuestion, null); // Ensure it's null if generation failed
+        }
+        return;
+      }
+      
+      safeSetState(setCurrentQuestion, question);
+      debugLog("initializeGame: Initial question set:", question);
+      
+      let details = null;
+      if (question.targetWord) {
+        safeSetState(setIsLoadingDetails, true); // setLoadingState directly
+        details = await fetchDetailsWithCache(question.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
+        if (isMounted.current) {
+          safeSetState(setWordDetails, details);
+          debugLog("initializeGame: Initial details set:", details);
+        }
+      }
+      
+      if (isMounted.current) {
+        fetchAndStoreNextQuestionAndDetails();
+        safeSetState(setGameInitialized, true);
+        debugLog("initializeGame: Game successfully initialized.");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        debugLog("initializeGame general error:", error.message, error.stack);
+        if (isMounted.current) {
+          toast({ title: "Initialization Failed", description: `Could not start the game: ${error.message}. Please try resetting.`, variant: "destructive" });
+        }
+      } else {
+        debugLog("initializeGame unknown error:", error);
+         if (isMounted.current) {
+          toast({ title: "Initialization Failed", description: "An unknown error occurred. Please try resetting.", variant: "destructive" });
+        }
+      }
+      safeSetState(setCurrentQuestion, null); // Ensure currentQuestion is null on error
+    } finally {
+      if (isMounted.current) {
+        safeSetState(setIsLoadingCurrentQuestion, false);
+      }
+      isLoadingTransition.current = false;
+      debugLog("initializeGame: Completed initialization process.");
+    }
+  }, [vocabLoading, hasEnoughWords, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState, debugLog, safeSetState]);
 
   const handleNextQuestion = useCallback(async () => {
-    debugLog("handleNextQuestion: Start. isLoadingTransition:", isLoadingTransition.current);
+    debugLog("handleNextQuestion: Starting. isLoadingTransition:", isLoadingTransition.current);
+    debugLog("[State Debug]:", { isLoadingCurrentQuestion, isLoadingNextQuestion, currentQuestion: Boolean(currentQuestion), nextQuestion: Boolean(nextQuestion), isLoadingTransition: isLoadingTransition.current });
+
     if (isLoadingTransition.current || !isMounted.current) return;
     
     isLoadingTransition.current = true;
-    debugLog("handleNextQuestion: Set isLoadingTransition to true.");
     
-    if(isMounted.current) {
-      resetQuestionState();
-      setIsLoadingCurrentQuestion(true);
-      setWordDetails(null); 
-    }
+    resetQuestionState();
+    safeSetState(setIsLoadingCurrentQuestion, true);
+    safeSetState(setWordDetails, null); 
     
-    currentQuestionAbortController.current?.abort("New current question fetch started");
+    // Abort controllers for the *new* current question fetch (if needed)
+    if (currentQuestionAbortController.current) currentQuestionAbortController.current.abort("Advancing to next question");
     currentQuestionAbortController.current = new AbortController();
-    wordDetailsAbortController.current?.abort("New current details fetch started");
+    if (wordDetailsAbortController.current) wordDetailsAbortController.current.abort("Advancing to next question for details");
     wordDetailsAbortController.current = new AbortController();
 
     try {
-      debugLog("handleNextQuestion: nextQuestion:", nextQuestion, "nextWordDetails:", nextWordDetails);
-      if (nextQuestion && nextQuestion.correctAnswer) { // Ensure nextQuestion is valid
-        if(isMounted.current) {
-            setCurrentQuestion(nextQuestion);
-            setWordDetails(nextWordDetails); 
-            setIsLoadingCurrentQuestion(false);
-        }
-        if (nextWordDetails || (nextQuestion && wordDetailsCache.current.has(nextQuestion.targetWord.toLowerCase()))) {
-             if(isMounted.current) setIsLoadingDetails(false); 
-        } else if (nextQuestion) { 
-            if(isMounted.current) setIsLoadingDetails(true);
+      if (nextQuestion && nextQuestion.correctAnswer) { 
+        debugLog("handleNextQuestion: Using pre-fetched nextQuestion:", nextQuestion.targetWord);
+        safeSetState(setCurrentQuestion, nextQuestion);
+        safeSetState(setWordDetails, nextWordDetails); // Use pre-fetched details too
+        
+        if (!nextWordDetails && nextQuestion.targetWord) { // If details for next question weren't ready, fetch them now
+            debugLog("handleNextQuestion: Pre-fetched details were not ready for", nextQuestion.targetWord, "fetching now.");
+            safeSetState(setIsLoadingDetails, true);
             const d = await fetchDetailsWithCache(nextQuestion.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
-            if(isMounted.current) setWordDetails(d);
+            safeSetState(setWordDetails, d);
         }
-        if(isMounted.current) {
-            setNextQuestion(null); 
-            setNextWordDetails(null);
-        }
-        await fetchAndStoreNextQuestionAndDetails();
+        
+        safeSetState(setNextQuestion, null); 
+        safeSetState(setNextWordDetails, null);
+        fetchAndStoreNextQuestionAndDetails(); // Start fetching the *new* next question
       } else {
         debugLog("handleNextQuestion: No valid pre-fetched nextQuestion. Generating one now.");
-        setIsLoadingNextQuestion(false); // No longer waiting for a "next" one that failed
-        setIsLoadingNextDetails(false);
+        // Ensure next loading states are false as we are consuming/regenerating current, not waiting for next
+        safeSetState(setIsLoadingNextQuestion, false);
+        safeSetState(setIsLoadingNextDetails, false);
 
-        const targetWordObj = selectTargetWord();
+        const targetWordObj = selectTargetWord(currentQuestion?.targetWord);
         if (targetWordObj) {
+          debugLog("handleNextQuestion: Selected new target word for on-the-fly generation:", targetWordObj.text);
           const q = await localGenerateSingleQuestion(targetWordObj, currentQuestionAbortController.current);
           if (isMounted.current) {
-            setCurrentQuestion(q);
-            setIsLoadingCurrentQuestion(false);
+            safeSetState(setCurrentQuestion, q);
             if (q && q.correctAnswer) {
+              debugLog("handleNextQuestion: On-the-fly question generated:", q.targetWord);
+              safeSetState(setIsLoadingDetails, true);
               const d = await fetchDetailsWithCache(q.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
-              if(isMounted.current) setWordDetails(d);
-              await fetchAndStoreNextQuestionAndDetails(); 
+              safeSetState(setWordDetails, d);
+              fetchAndStoreNextQuestionAndDetails(); 
             } else {
-               if(isMounted.current){
-                    debugLog("handleNextQuestion: Failed to generate question on-the-fly.");
-                    toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Familiar' or 'Mastered' words or check AI status.", variant: "destructive" });
-                    setCurrentQuestion(null); 
-               }
+               debugLog("handleNextQuestion: Failed to generate question on-the-fly (q is null or invalid).");
+               toast({ title: "Game Over?", description: "Could not load a new question. Add more 'Familiar' or 'Mastered' words.", variant: "destructive" });
+               safeSetState(setCurrentQuestion, null); 
             }
           }
         } else {
-          if(isMounted.current){
-            debugLog("handleNextQuestion: No target word found for on-the-fly generation.");
-            setCurrentQuestion(null); 
-            toast({ title: "No words left!", description: "You've completed all 'Familiar' or 'Mastered' words.", variant: "default" });
-          }
+          debugLog("handleNextQuestion: No target word found for on-the-fly generation. Game ends.");
+          safeSetState(setCurrentQuestion, null); 
+          toast({ title: "No Words Left!", description: "You've completed all 'Familiar' or 'Mastered' words.", variant: "default" });
         }
       }
     } catch (error) {
-        if(isMounted.current) {
-            debugLog("Error in handleNextQuestion catch block:", error);
-            setCurrentQuestion(null);
-            toast({ title: "Error", description: "An unexpected error occurred while loading the next question.", variant: "destructive" });
-        }
+      if(isMounted.current) {
+        debugLog("Error in handleNextQuestion general catch block:", error);
+        toast({ title: "Error Advancing", description: "An unexpected error occurred.", variant: "destructive" });
+        safeSetState(setCurrentQuestion, null);
+      }
     } finally {
       if (isMounted.current) {
-        setIsLoadingCurrentQuestion(false); 
-        debugLog("handleNextQuestion: Set isLoadingTransition to false in finally.");
+        safeSetState(setIsLoadingCurrentQuestion, false); 
       }
       isLoadingTransition.current = false;
+      debugLog("handleNextQuestion: Completed.");
     }
-  }, [nextQuestion, nextWordDetails, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState]);
+  }, [nextQuestion, nextWordDetails, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState, currentQuestion, debugLog, safeSetState, libraryWords]);
 
-  const initializeGame = useCallback(async () => {
-    debugLog("initializeGame: Start. vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized, "isLoadingTransition:", isLoadingTransition.current);
-    if (isLoadingTransition.current || !isMounted.current || vocabLoading || !hasEnoughWords || gameInitialized) return;
-    
-    isLoadingTransition.current = true;
-    debugLog("initializeGame: Set isLoadingTransition to true.");
-    
-    if(isMounted.current) {
-      resetQuestionState();
-      setIsLoadingCurrentQuestion(true);
-      setWordDetails(null);
-    }
-    
-    currentQuestionAbortController.current?.abort("Game initialization started");
-    currentQuestionAbortController.current = new AbortController();
-    wordDetailsAbortController.current?.abort("Game initialization started");
-    wordDetailsAbortController.current = new AbortController();
-
-    try {
-      const initialTargetWord = selectTargetWord();
-      debugLog("initializeGame: Initial target word:", initialTargetWord);
-      if (!initialTargetWord) {
-        if (isMounted.current) {
-            debugLog("initializeGame: No initial target word found.");
-            setCurrentQuestion(null);
-            setIsLoadingCurrentQuestion(false);
-        }
-        isLoadingTransition.current = false;
-        debugLog("initializeGame: Set isLoadingTransition to false (no initial word).");
-        return;
-      }
-      const question = await localGenerateSingleQuestion(initialTargetWord, currentQuestionAbortController.current);
-      if (isMounted.current) {
-        setCurrentQuestion(question);
-        if (question && question.correctAnswer) {
-          debugLog("initializeGame: Initial question generated:", question);
-          const details = await fetchDetailsWithCache(question.targetWord, wordDetailsAbortController.current, setIsLoadingDetails);
-          if(isMounted.current) setWordDetails(details);
-          debugLog("initializeGame: Initial details fetched:", details);
-          await fetchAndStoreNextQuestionAndDetails();
-        } else {
-            debugLog("initializeGame: Failed to generate initial question.");
-            setCurrentQuestion(null); // Ensure no partial question state
-        }
-      }
-    } catch (error) {
-        if(isMounted.current) {
-            debugLog("Error in initializeGame catch block:", error);
-            setCurrentQuestion(null);
-            toast({ title: "Error", description: "Could not initialize the game.", variant: "destructive" });
-        }
-    } finally {
-      if (isMounted.current) {
-        setIsLoadingCurrentQuestion(false);
-        setGameInitialized(true);
-        debugLog("initializeGame: Game initialized and set isLoadingTransition to false in finally.");
-      }
-      isLoadingTransition.current = false;
-    }
-  }, [vocabLoading, hasEnoughWords, gameInitialized, selectTargetWord, localGenerateSingleQuestion, fetchDetailsWithCache, fetchAndStoreNextQuestionAndDetails, toast, resetQuestionState]);
 
   useEffect(() => {
-    debugLog("Effect for game initialization: vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized);
+    debugLog("Effect for game initialization check: vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized);
     if (!vocabLoading && hasEnoughWords && !gameInitialized) {
       initializeGame();
     }
-  }, [vocabLoading, hasEnoughWords, gameInitialized, initializeGame]);
+  }, [vocabLoading, hasEnoughWords, gameInitialized, initializeGame, debugLog]);
 
   useEffect(() => {
     if (aiFailureCount >= 3) {
       if(isMounted.current) {
         debugLog("AI failure count reached 3, showing alert.");
-        setShowAiFailureAlert(true);
+        safeSetState(setShowAiFailureAlert, true);
       }
     } else {
-      if(isMounted.current) setShowAiFailureAlert(false);
+      if(isMounted.current) safeSetState(setShowAiFailureAlert, false);
     }
-  }, [aiFailureCount]);
+  }, [aiFailureCount, debugLog, safeSetState]);
 
   const handleSubmit = useCallback(async () => {
-    debugLog("handleSubmit: Start. currentQuestion:", currentQuestion, "isCorrect:", isCorrect);
-    if (!currentQuestion || !currentQuestion.correctAnswer || isCorrect !== null) return; // Check isCorrect to prevent re-submission
+    debugLog("handleSubmit: Start. currentQuestion:", currentQuestion?.targetWord, "userInput:", userInput, "isCorrect (before submit):", isCorrect);
+    if (!currentQuestion || !currentQuestion.correctAnswer || isCorrect !== null) {
+        debugLog("handleSubmit: Exiting - no current question, no correct answer, or already answered.");
+        return;
+    }
 
     const currentAttempts = attempts + 1;
-    setAttempts(currentAttempts);
+    safeSetState(setAttempts, currentAttempts);
 
     const userNormalizedInput = userInput.trim().toLowerCase();
     const correctNormalizedAnswer = currentQuestion.correctAnswer.trim().toLowerCase();
     const currentlyCorrect = userNormalizedInput === correctNormalizedAnswer;
     
-    setIsCorrect(currentlyCorrect);
+    safeSetState(setIsCorrect, currentlyCorrect);
     debugLog("handleSubmit: User input:", userInput, "Correct answer:", currentQuestion.correctAnswer, "Result:", currentlyCorrect);
 
     const targetWordObject = allLibraryWords.find(w => w.text === currentQuestion.targetWord);
@@ -474,24 +586,21 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         let newFamiliarity: FamiliarityLevel = targetWordObject.familiarity;
         if (currentAttempts === 1 && !hintUsedThisTurn) {
           if (targetWordObject.familiarity === 'Familiar') newFamiliarity = 'Mastered';
-          // If already Mastered, stays Mastered
-        } else { // Correct, but multiple attempts or hint used
+        } else { 
           if (targetWordObject.familiarity === 'Mastered') newFamiliarity = 'Familiar';
-          // If Familiar or Learning, stays as is
         }
         if (newFamiliarity !== targetWordObject.familiarity) {
             debugLog("handleSubmit (Correct): Updating familiarity for", targetWordObject.text, "from", targetWordObject.familiarity, "to", newFamiliarity);
             updateWordFamiliarity(targetWordObject.id, newFamiliarity);
         }
       }
-    } else { // Incorrect submission
-      setShowCorrectAnswer(true);
+    } else { 
+      safeSetState(setShowCorrectAnswer, true);
       toast({ title: "Incorrect", description: `The correct answer was: "${currentQuestion.correctAnswer}"`, variant: "destructive" });
       if (targetWordObject) {
         let newFamiliarity: FamiliarityLevel = targetWordObject.familiarity;
         if (targetWordObject.familiarity === 'Mastered') newFamiliarity = 'Familiar';
         else if (targetWordObject.familiarity === 'Familiar') newFamiliarity = 'Learning';
-        // If Learning or New, stays as is
         if (newFamiliarity !== targetWordObject.familiarity) {
             debugLog("handleSubmit (Incorrect): Updating familiarity for", targetWordObject.text, "from", targetWordObject.familiarity, "to", newFamiliarity);
             updateWordFamiliarity(targetWordObject.id, newFamiliarity);
@@ -499,22 +608,21 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       }
     }
     
-    // Show details for the target word regardless of correct/incorrect
-    if(isMounted.current) setShowDetails(true);
+    if(isMounted.current) safeSetState(setShowDetails, true);
     if ((!wordDetails || wordDetails.word !== currentQuestion.targetWord) && isMounted.current) {
-        setIsLoadingDetails(true); 
-        wordDetailsAbortController.current?.abort("New submission, fetching details if needed.");
+        safeSetState(setIsLoadingDetails, true); 
+        if (wordDetailsAbortController.current) wordDetailsAbortController.current.abort("New submission, fetching details if needed.");
         wordDetailsAbortController.current = new AbortController();
         const d = await fetchDetailsWithCache(currentQuestion.targetWord, wordDetailsAbortController.current!, setIsLoadingDetails);
-        if (isMounted.current) setWordDetails(d);
+        safeSetState(setWordDetails, d);
     } else if (isMounted.current) {
-        setIsLoadingDetails(false); 
+        safeSetState(setIsLoadingDetails, false); 
     }
 
-  }, [currentQuestion, isCorrect, userInput, allLibraryWords, updateWordFamiliarity, toast, attempts, hintUsedThisTurn, wordDetails, fetchDetailsWithCache]);
+  }, [currentQuestion, isCorrect, userInput, allLibraryWords, updateWordFamiliarity, toast, attempts, hintUsedThisTurn, wordDetails, fetchDetailsWithCache, debugLog, safeSetState]);
 
   const revealHint = useCallback(() => {
-    debugLog("revealHint: Start. currentQuestion:", currentQuestion, "userInput:", userInput);
+    debugLog("revealHint: Start. currentQuestion:", currentQuestion?.targetWord, "userInput:", userInput);
     if (!currentQuestion || !currentQuestion.correctAnswer || hintRevealedThisQuestion || isCorrect !== null) return;
 
     let firstDiffIndex = -1;
@@ -525,35 +633,39 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         }
     }
 
-    if (firstDiffIndex === -1 && userInput.length === currentQuestion.correctAnswer.length) { // Input is already correct
+    if (firstDiffIndex === -1 && userInput.length === currentQuestion.correctAnswer.length) { 
         return;
     }
     
-    const revealUpToIndex = firstDiffIndex === -1 ? currentQuestion.correctAnswer.length : firstDiffIndex + 1;
+    const revealUpToIndex = firstDiffIndex === -1 ? userInput.length + 1 : firstDiffIndex + 1;
+    if (revealUpToIndex > currentQuestion.correctAnswer.length) {
+      debugLog("revealHint: Cannot reveal beyond correct answer length.");
+      return;
+    }
     const revealedPortion = currentQuestion.correctAnswer.substring(0, revealUpToIndex);
     
-    setUserInput(revealedPortion);
-    setHintRevealedThisQuestion(true);
-    setHintUsedThisTurn(true);
+    safeSetState(setUserInput, revealedPortion);
+    safeSetState(setHintRevealedThisQuestion, true);
+    safeSetState(setHintUsedThisTurn, true);
     
-    debugLog("revealHint: Revealed up to index", revealUpToIndex, ". New input:", revealedPortion);
-    toast({ 
-      title: "Hint Revealed", 
-      description: `Input updated to "${revealedPortion}"`,
-      className: "bg-blue-500 text-white"
-    });
+    debugLog("revealHint: Revealed up to index", revealUpToIndex -1 , ". New input:", revealedPortion);
+    toast({ title: "Hint Revealed", description: `Input updated to "${revealedPortion}"`, className: "bg-blue-500 text-white" });
+    
     if (hiddenInputRef.current) {
       hiddenInputRef.current.focus();
-      // Move cursor to the end of the revealed portion
       setTimeout(() => hiddenInputRef.current?.setSelectionRange(revealedPortion.length, revealedPortion.length), 0);
     }
-  }, [currentQuestion, userInput, hintRevealedThisQuestion, isCorrect, toast]);
+  }, [currentQuestion, userInput, hintRevealedThisQuestion, isCorrect, toast, debugLog, safeSetState]);
 
   const handleHiddenInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isCorrect !== null) return; // Don't allow changes after submission
+    if (isCorrect !== null) return; 
     const value = e.target.value;
+    // Allow input only up to the length of the correct answer
     if (currentQuestion && value.length <= currentQuestion.correctAnswer.length) {
-      setUserInput(value);
+      safeSetState(setUserInput, value);
+    } else if (currentQuestion && value.length > currentQuestion.correctAnswer.length) {
+      // If user tries to type beyond, keep input at max length
+      safeSetState(setUserInput, value.substring(0, currentQuestion.correctAnswer.length));
     }
   };
 
@@ -562,10 +674,8 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
   
     const correctAnswerChars = currentQuestion.correctAnswer.split('');
     const displaySpans = [];
-  
-    // Determine overall correctness of the current userInput prefix
-    // This is for the "neo -> all red" effect
     let isInputCurrentlyCorrectPrefix = true;
+
     if (userInput.length > 0 && !showCorrectAnswer) {
         isInputCurrentlyCorrectPrefix = currentQuestion.correctAnswer.toLowerCase().startsWith(userInput.toLowerCase());
     }
@@ -576,20 +686,26 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
       let charColor = 'text-foreground';
       let borderColor = 'border-muted-foreground';
   
-      if (showCorrectAnswer) {
+      if (showCorrectAnswer) { // After submission (correct or incorrect)
         charToDisplay = correctAnswerChars[i];
-        if (typedChar?.toLowerCase() === correctAnswerChars[i].toLowerCase()) {
-          charColor = 'text-green-500 dark:text-green-400';
-          borderColor = isCorrect ? 'border-green-500 dark:border-green-400' : 'border-green-500 dark:border-green-400'; // Correct part is green
-        } else if (typedChar) { // User typed something, but it was wrong
-          charColor = 'text-red-500 dark:text-red-400'; // Show correct char in red if user's input was there and wrong
-          borderColor = 'border-red-500 dark:border-red-400';
-        } else { // User didn't type this far, show correct char
-          charColor = 'text-foreground'; // Neutral color for correctly filled in missing parts
-          borderColor = isCorrect === false ? 'border-red-500 dark:border-red-400' : 'border-muted-foreground';
+        if (isCorrect) { // If the whole answer was correct
+            charColor = 'text-green-500 dark:text-green-400';
+            borderColor = 'border-green-500 dark:border-green-400';
+        } else { // If submission was incorrect
+            if (typedChar?.toLowerCase() === correctAnswerChars[i].toLowerCase()) {
+              charColor = 'text-green-500 dark:text-green-400'; // User got this specific char right
+              borderColor = 'border-green-500 dark:border-green-400';
+            } else if (typedChar) { // User typed something here, and it was wrong
+              charColor = 'text-red-500 dark:text-red-400'; // Show what user typed, in red
+              charToDisplay = typedChar; // Show user's incorrect char
+              borderColor = 'border-red-500 dark:border-red-400';
+            } else { // User didn't type this far, show correct char
+              charColor = 'text-orange-500 dark:text-orange-400'; // Correct char that user missed
+              borderColor = 'border-orange-500 dark:border-orange-400';
+            }
         }
-      } else if (typedChar) {
-        charToDisplay = typedChar;
+      } else if (typedChar) { // While typing, before submission
+        charToDisplay = typedChar; // Show what user typed
         charColor = isInputCurrentlyCorrectPrefix ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         borderColor = isInputCurrentlyCorrectPrefix ? 'border-green-500 dark:border-green-400' : 'border-red-500 dark:border-red-400';
       }
@@ -610,16 +726,53 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
     return <div className="flex flex-wrap justify-center items-center p-2 cursor-text" onClick={() => hiddenInputRef.current?.focus()}>{displaySpans}</div>;
   }, [currentQuestion, userInput, showCorrectAnswer, isCorrect]);
 
+  const renderDebugInfo = useCallback(() => {
+    if (!DEBUG) return null;
+    return (
+      <div className="text-xs border border-red-500 p-2 mt-4 bg-red-50 dark:bg-red-900/20 rounded max-w-full overflow-auto">
+        <h4 className="font-bold mb-1">Debug Info:</h4>
+        <ul className="space-y-0.5">
+          <li>hasEnoughWords: {hasEnoughWords.toString()}</li>
+          <li>gameInitialized: {gameInitialized.toString()}</li>
+          <li>isLoadingTransition: {isLoadingTransition.current.toString()}</li>
+          <li>isLoadingCurrentQ: {isLoadingCurrentQuestion.toString()}</li>
+          <li>isLoadingNextQ: {isLoadingNextQuestion.toString()}</li>
+          <li>isLoadingDetails: {isLoadingDetails.toString()}</li>
+          <li>isLoadingNextDetails: {isLoadingNextDetails.toString()}</li>
+          <li>CurrentQ: {currentQuestion ? `${currentQuestion.targetWord} (${currentQuestion.correctAnswer})` : 'null'}</li>
+          <li>NextQ: {nextQuestion ? `${nextQuestion.targetWord} (${nextQuestion.correctAnswer})` : 'null'}</li>
+          <li>CurrentDetails: {wordDetails ? wordDetails.word : 'null'}</li>
+          <li>NextDetails: {nextWordDetails ? nextWordDetails.word : 'null'}</li>
+          <li>aiFailureCount: {aiFailureCount}</li>
+          <li>Available Words: {libraryWords.length}</li>
+        </ul>
+        <div className="mt-2">
+          <Button 
+            size="sm" 
+            variant="destructive" 
+            onClick={() => {
+              debugLog("Force Reset button clicked");
+              resetGame();
+              setTimeout(initializeGame, 100); // Slight delay before re-initializing
+            }}
+          >
+            Force Reset Game
+          </Button>
+        </div>
+      </div>
+    );
+  }, [hasEnoughWords, gameInitialized, isLoadingCurrentQuestion, isLoadingNextQuestion, isLoadingDetails, isLoadingNextDetails, currentQuestion, nextQuestion, wordDetails, nextWordDetails, aiFailureCount, libraryWords, resetGame, initializeGame, debugLog]);
+
 
   if (vocabLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-2">Loading vocabulary...</span></div>;
   }
 
-  if (!hasEnoughWords) {
+  if (!hasEnoughWords && !vocabLoading && !gameInitialized) { // Show only if vocab loaded and determined no words
     return (
       <Alert variant="default" className="border-primary max-w-md mx-auto">
         <Lightbulb className="h-5 w-5 text-primary" />
-        <AlertTitle>Not Enough "Familiar" or "Mastered" Words</AlertTitle>
+        <AlertTitle>Not Enough Words</AlertTitle>
         <AlertDescription>You need at least one word marked as "Familiar" or "Mastered" in your library to play this game. Please add or update words in the Library tab.</AlertDescription>
         <Button onClick={onStopGame} variant="outline" className="mt-4">Back to Games Menu</Button>
       </Alert>
@@ -632,13 +785,14 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         <Info className="h-5 w-5" />
         <AlertTitle>AI Service Issue</AlertTitle>
         <AlertDescription>
-          There seems to be an issue generating questions/details from the AI. Please try again later or check your API quota.
+          There seems to be an issue generating questions/details from the AI. Please try resetting or check back later.
         </AlertDescription>
         <div className="mt-4 flex gap-2">
           <Button onClick={() => { 
-            setAiFailureCount(0); 
-            setShowAiFailureAlert(false); 
-            initializeGame();
+            debugLog("Try Again from AI Failure Alert");
+            safeSetState(setShowAiFailureAlert, false); 
+            resetGame();
+            setTimeout(initializeGame, 100);
           }} variant="outline">
             <RefreshCw className="mr-2 h-4 w-4" /> Try Again
           </Button>
@@ -656,11 +810,11 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl">Text Input Challenge</CardTitle>
-            {(isLoadingNextQuestion || isLoadingNextDetails) && isCorrect === null && (
+            {(isLoadingNextQuestion || isLoadingNextDetails) && isCorrect === null && !isLoadingTransition.current && (
               <div className="flex items-center text-xs text-muted-foreground">
                 <Sparkles className="h-4 w-4 text-primary mr-1" /> 
                 <span>Preparing next...</span>
-                {(isLoadingNextQuestion || isLoadingNextDetails) && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                <Loader2 className="h-3 w-3 animate-spin ml-1" />
               </div>
             )}
           </div>
@@ -684,7 +838,6 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
                 Hint: {currentQuestion.translatedHint}
               </p>
               
-              {/* Visually hidden input for capturing keyboard events */}
               <input
                 ref={hiddenInputRef}
                 type="text"
@@ -692,27 +845,25 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
                 onChange={handleHiddenInputChange}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' && isCorrect === null && userInput.trim().length > 0) {
-                        e.preventDefault(); // Prevent form submission if wrapped in one
+                        e.preventDefault(); 
                         handleSubmit();
                     }
                 }}
                 className="opacity-0 absolute w-0 h-0 pointer-events-none"
                 aria-label="Type the missing word here"
-                maxLength={currentQuestion.correctAnswer.length}
+                maxLength={currentQuestion.correctAnswer.length + 5} // Allow slight overtyping
                 disabled={isCorrect !== null}
                 autoFocus
               />
               
-              {/* Character display area */}
               {renderCharacterSpans()}
               
               {isCorrect === false && showCorrectAnswer && (
                 <p className="text-sm text-red-500 dark:text-red-400 text-center font-semibold">
-                  Incorrect. The correct answer was: "{currentQuestion.correctAnswer}"
+                  The correct answer was: "{currentQuestion.correctAnswer}"
                 </p>
               )}
               
-              {/* Hint button */}
               <div className="flex justify-center pt-2">
                 <Button 
                   onClick={revealHint} 
@@ -728,15 +879,19 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
             </>
           )}
           
-          {!isLoadingCurrentQuestion && !currentQuestion && !vocabLoading && !isLoadingTransition.current && (
-            <Alert variant="default">
+          {!isLoadingCurrentQuestion && !currentQuestion && !vocabLoading && !isLoadingTransition.current && gameInitialized && (
+             <Alert variant="default">
               <Info className="h-5 w-5" />
               <AlertTitle>No Question Available</AlertTitle>
               <AlertDescription>
-                Could not load a question. You might need more words in "Familiar" or "Mastered" state, or there was an AI issue.
+                Could not load a question. You might need more 'Familiar' or 'Mastered' words, or there was an AI issue.
               </AlertDescription>
               <Button 
-                onClick={initializeGame} 
+                onClick={() => {
+                  debugLog("Try Again button clicked from No Question Available alert");
+                  resetGame();
+                  setTimeout(initializeGame,100);
+                }}
                 className="mt-3" 
                 disabled={isLoadingTransition.current || isLoadingCurrentQuestion}
               >
@@ -751,7 +906,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
             <StopCircle className="mr-2 h-5 w-5" /> Stop Game
           </Button>
 
-          {isCorrect === null && currentQuestion && ( // Show Submit button only if question is active and not yet answered
+          {isCorrect === null && currentQuestion && (
             <Button 
               onClick={handleSubmit} 
               disabled={userInput.trim().length === 0} 
@@ -762,7 +917,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
             </Button>
           )}
 
-          {isCorrect !== null && ( // Show Next Question button after an answer (correct or incorrect)
+          {isCorrect !== null && ( 
             <Button 
               onClick={handleNextQuestion} 
               className="w-full sm:w-auto" 
@@ -788,12 +943,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame }) => {
           isLoading={isLoadingDetails} 
         />
       )}
+      {DEBUG && renderDebugInfo()}
     </div>
   );
 });
 
 TextInputGame.displayName = 'TextInputGame';
 export default TextInputGame;
-
-
-    
