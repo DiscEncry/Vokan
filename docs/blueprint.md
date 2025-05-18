@@ -8,6 +8,14 @@
 - AI Detail Panel: The AI tool crafts detailed information about a selected word, offering definitions, example sentences, Vietnamese translations, synonyms, antonyms, usage tips, and additional relevant facts to aid in comprehensive learning.
 - Spaced Repetition System: Schedules word quizzes using the FSRS algorithm to help retain hard-earned vocabularly.
 
+- Text Input Game: Users type in the word to test their knowledge of the word's spelling.
+    - Hinting
+        - As the user types the word, each letter is checked against the correct answer. For example, if the correct word is "never", typing "n" will highlight the letter green (correct so far). Typing "ne" will still be green (still correct). But if they type "neo", all the letters will turn red (indicating the input is now incorrect).
+        - There will be a "Reveal Next Letter" button. When pressed, it shows the next correct letter in the word. This action will decrease the familiarity score for that word. The button disappears after one use (only one hint is allowed per word).
+
+
+
+
 ## Style Guidelines:
 
 - Mobile-first responsive design, optimized for various screen sizes using CSS Grid/Flexbox.
