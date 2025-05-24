@@ -1,0 +1,49 @@
+
+# FSRSv5 Implementation Checklist
+
+## FSRS State Representation
+
+* [ ] **Verify FSRSCard fields:** Ensure each flashcard’s data record includes all FSRSv5 fields: `due`, `stability`, `difficulty`, `elapsed_days`, `scheduled_days`, `learning_steps`, `reps`, `lapses`, `state`, and `last_review`. These fields are defined by the TS‑FSRS Card interface, so your database schema (or persistent store) should match them exactly. Check that data types line up (e.g. `due` and `last_review` as timestamps/dates, numeric types for stability/difficulty, etc.) to avoid schema mismatch errors.
+* [ ] **Schema consistency:** Compare the DB schema vs. the FSRSCard interface (from ts‑fsrs). Every field in the FSRS state should correspond to a column or property in your storage. Add any missing fields or rename mismatches so that your game’s data model aligns with the FSRS library’s expected structure.
+
+## Review Scheduling and Rating Handling
+
+* [ ] **Map game outcomes to FSRS ratings:** Define how gameplay results translate into FSRS review ratings (`Again`, `Hard`, `Good`, `Easy`). For example, an incorrect answer → `Again`, a borderline/time−out → `Hard`, a correct answer → `Good`, and a very fast/“easy” correct answer → `Easy`. In TS‑FSRS these are the enum `Rating.Again`, `Rating.Hard`, `Rating.Good`, `Rating.Easy`, often represented as `[Rating.Again, Rating.Hard, Rating.Good, Rating.Easy]`. Ensure every game result maps to one of these four so that `fsrs.next(card, now, rating)` is always called with a valid rating.
+* [ ] **Use `fsrs.next` correctly:** After each review, call `fsrs.next(card, now, rating)` (or use the `f.repeat(card, now)` scheduling flow) to update the card’s state. Check that this call returns a new Card state and optional ReviewLog, and that the returned fields (new `due`, updated `stability`/`difficulty`, etc.) make sense. In particular, verify that `last_review` is set to the current time and that `reps` and `lapses` counters update appropriately. If you persist ReviewLog entries, confirm they include the `rating`, previous `state`, previous `due/stability/difficulty`, and the review timestamp as shown in TS‑FSRS.
+* [ ] **Timestamp handling:** Confirm that review timestamps (`last_review`) and due dates (`due`) are recorded correctly. FSRS assumes `last_review` is the time of the most recent review. If you store a log, ensure it captures the review time and prior state. This allows you to reconstruct performance history or debug scheduling behavior later.
+
+## Game Mode Differentiation
+
+* [ ] **Distinct rating logic per mode:** If your game has multiple modes (e.g. multiple-choice vs. text input), ensure each mode uses an appropriate mapping to FSRS ratings. For instance, penalize text-input (harder) questions more strictly than MCQs, or vice versa. Adjust the score or time thresholds that trigger `Again/Hard/Good/Easy` based on mode difficulty. Verify in code that mode-specific logic correctly selects the rating and weightings.
+* [ ] **Weight or difficulty adjustment:** Optionally vary the FSRS parameters (such as initial difficulty) per mode. For example, you might initialize MCQ cards with a lower difficulty than free-recall cards. Confirm that any such mode-based adjustments are applied when creating or updating cards.
+
+## Same-Day Review Logic
+
+* [ ] **Enable short-term mode:** FSRSv5 supports sub-day intervals for learning. Make sure the FSRS instance is configured with short-term learning enabled (e.g. `enable_short_term: true` in `generatorParameters`). This ensures multiple reviews in one day affect the schedule correctly.
+* [ ] **Include sub-day steps:** Verify that `learning_steps` sequences include fractional-day intervals (for example, 0.25 days = 6 hours) so that cards can reappear within the same session. In TS‑FSRS this happens when short-term mode is active. Check that after an “Again” rating, the card’s next `due` is a few hours later as expected.
+* [ ] **In-session review queue:** If your game allows repeated reviews in one session, implement an auxiliary queue of due/review cards. Whenever the player finishes a card, prioritize any other cards whose `due` ≤ now (including sub-day intervals). This mimics a “session review” where learned cards can repeat quickly before the session ends.
+
+## Scheduling Load Management
+
+* [ ] **Retention target:** Choose a realistic `desired_retention` (often 0.7–0.9) in your FSRS parameters. A lower retention means more frequent reviews, a higher retention means less forgetting but more reviews. While TS‑FSRS’s default may be \~0.9, confirm it’s set appropriately for your user base. (The FSRS algorithm will then adjust intervals to aim for this retention rate.)
+* [ ] **No hard caps on new cards:** FSRS itself does not impose a fixed daily new-card limit. Ensure your game does not artificially cap new vocabulary per day unless you handle it explicitly. Let FSRS schedule as many cards as needed to meet the retention goal, but you can enforce practical limits at the game level.
+* [ ] **Max interval and fuzz:** Check that `maximum_interval` is set to a sensible upper bound (e.g. 1000 days) so cards don’t get scheduled decades out. Also enable interval fuzz (`enable_fuzz: true`) to randomize intervals slightly, preventing all cards from clustering on exact days. Confirm these parameters (via `generatorParameters({ maximum_interval: N, enable_fuzz: true })`) are used in your FSRS instance.
+
+## User Experience Hooks
+
+* [ ] **Due-card indicators:** In the UI/game HUD, show when vocabulary is due soon. For example, display a counter or highlight words whose `due` date ≤ today. This reminder encourages review. Ensure your UI checks the FSRS `due` field and flags these cards.
+* [ ] **Prioritize due cards in gameplay:** Design game logic so that due/review cards are served during active play, not just when the user explicitly goes to a review screen. For example, include due words in practice batches and weight them higher. Verify that the scheduling algorithm’s output (`due` dates) is used to queue up or sprinkle in due cards.
+* [ ] **Rewards for review adherence:** Optionally tie game rewards (points, badges, progress) to completing scheduled reviews. For instance, give a bonus when a user reviews a card on or before its due date. Check that any such bonus system correctly detects FSRS-due cards and is triggered only when reviews align with the schedule.
+
+## Test and Debug Support
+
+* [ ] **Mock card simulation:** Create test flashcards with known states and simulate review sequences. For example, set up a new card and apply ratings sequence (Good → Hard → Again, etc.). After each `fsrs.next`, verify that the card’s `due`, `stability`, and other stats evolve as expected. Compare against a known FSRS implementation (like TS-FSRS) outputs to catch discrepancies.
+* [ ] **Corner cases:** Test edge cases such as multiple reviews in one day, very rapid repeats, or very easy cards. For instance, simulate reviewing the same card twice within a few hours and confirm stability jumps/decay correctly. Also test the initial review and transitions from New → Learning → Review states. Logging the ReviewLog from TS-FSRS can help debug these scenarios.
+* [ ] **Persistence checks:** If you store FSRS state in a database, simulate restarting the app or loading the state in a new session. Confirm that after reloading, the FSRS calculations (given card fields) produce the same scheduling as before. This validates that you saved all necessary fields and timestamps correctly.
+
+## Reference Resources
+
+* [ts-fsrs GitHub](https://github.com/open-spaced-repetition/ts-fsrs) – the official TypeScript FSRS library (source code and README).
+* [ts-fsrs Documentation](https://open-spaced-repetition.github.io/ts-fsrs/) – docs and examples for using TS‑FSRS (includes usage patterns and Card/Log type definitions).
+* [FSRS JSON Field Reference](https://github.com/open-spaced-repetition/ts-fsrs/blob/main/src/type.ts) – TS‑FSRS interface definitions for card fields and logs (shows the JSON structure).
+* [FSRS v5 Paper](https://fsrs.vercel.app/) – the original paper/explainer for FSRSv5 (algorithm details and theory).

@@ -1,0 +1,45 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read and write only their own data
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Word Details Cache - Accessible by anyone
+    // Document ID is the lowercased word
+    match /wordDetailsCache/{wordText} {
+      allow read: if true; // Anyone can read from the cache
+      allow write: if true; // Anyone (via the AI flow) can write to the cache
+    }
+    
+    // Deny all other access to unspecified paths by default
+    // This rule is intentionally broad and should be placed after more specific allow rules.
+    // However, given the /users/{userId}/{document=**} and /wordDetailsCache/{wordText} rules,
+    // this specific deny-all for any other top-level collection might be too restrictive
+    // if you plan to add other collections later without explicit rules.
+    // For now, to keep it functional with the cache, we'll ensure specific paths are open.
+    // Consider carefully if you add more top-level collections.
+    // A common practice is to deny by default and only allow specific paths.
+    // The current setup with the two explicit allows and then a general deny is one way.
+    // If you remove the below deny-all, ensure all collections have appropriate rules.
+    match /{path=**}/documents/{document} {
+       allow read, write: if false; // Default deny for any path not explicitly matched above.
+                                   // This is very restrictive. If you add new collections,
+                                   // you'll need to add rules for them *before* this.
+                                   // For /wordDetailsCache to work, its rule must be evaluated first.
+                                   // To be safe and ensure existing /users path works and new /wordDetailsCache works,
+                                   // and to prevent accidental open access to other future paths,
+                                   // we rely on Firestore's default behavior of "deny unless explicitly allowed".
+                                   // So, this explicit global deny might be redundant if all desired paths are explicitly allowed.
+                                   // Let's refine it to be more standard: deny all by default unless explicitly allowed by prior rules.
+    }
+    // The default behavior of Firestore is to deny all access unless explicitly allowed.
+    // So, the rules for /users and /wordDetailsCache will grant access,
+    // and any other path will be denied by default without needing an explicit global deny.
+    // However, if you had a "match /{document=**} { allow read, write: if false; }" previously at the root level
+    // of `match /databases/{database}/documents { ... }`, it needs to be managed carefully.
+    // Let's go with the explicit allow for users and cache, and other paths will be implicitly denied.
+  }
+}
