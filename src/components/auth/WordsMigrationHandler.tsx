@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast"; // Corrected import path
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { Loader2 } from "lucide-react";
+import { showStandardToast } from '@/lib/showStandardToast';
 
 const STORAGE_KEY = 'lexify-vocabulary';
 
@@ -83,17 +84,10 @@ export function WordsMigrationHandler() {
       // Mark as migrated for this user
       localStorage.setItem(`${STORAGE_KEY}-migrated-${user.uid}`, 'true');
       
-      toast({
-        title: "Words migrated successfully",
-        description: `${localWords.length} words were migrated to the cloud.`,
-      });
+      showStandardToast(toast, 'success', 'Migration Complete', 'Your words have been migrated successfully.');
     } catch (error) {
       console.error("Error migrating words:", error);
-      toast({
-        title: "Migration failed",
-        description: "There was an error migrating your words. Your local words are still safe.",
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Migration Error', 'There was an error migrating your words.');
     }
     
     setIsMigrating(false);

@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAutocomplete } from '@/hooks/useAutocomplete';
 import { isValidWordLocally } from '@/lib/localWordValidator';
 import { cn } from '@/lib/utils';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 interface AddWordFormProps {
   disabled?: boolean;
@@ -191,29 +192,17 @@ const AddWordForm: FC<AddWordFormProps> = React.memo(({ disabled }) => {
     const trimmedWord = newWord.trim();
 
     if (!trimmedWord) {
-      toast({
-        title: "Empty Word",
-        description: "Please enter a word to add.",
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Invalid Word', 'Please enter a valid word.');
       return;
     }
 
     if (trimmedWord.length > MAX_WORD_LENGTH) {
-      toast({
-        title: "Word Too Long",
-        description: `Words cannot exceed ${MAX_WORD_LENGTH} characters.`,
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Word Too Long', `Words cannot exceed ${MAX_WORD_LENGTH} characters.`);
       return;
     }
 
     if (libraryWords.some(w => w.text.toLowerCase() === trimmedWord.toLowerCase())) {
-      toast({
-        title: "Duplicate Word",
-        description: `The word "${trimmedWord}" is already in your library.`,
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Duplicate Word', `"${trimmedWord}" is already in your library.`);
       setNewWord('');
       setJustSelected(false);
       lastSelectedWordRef.current = '';
@@ -225,11 +214,7 @@ const AddWordForm: FC<AddWordFormProps> = React.memo(({ disabled }) => {
     setIsValidatingLocally(false);
 
     if (!isLocallyValid) {
-      toast({
-        title: "Word Not Found",
-        description: `"${trimmedWord}" was not found in our local dictionary. Please check the spelling.`,
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Word Not Found', `"${trimmedWord}" was not found in our local dictionary. Please check the spelling.`);
       return;
     }
 
@@ -238,22 +223,14 @@ const AddWordForm: FC<AddWordFormProps> = React.memo(({ disabled }) => {
     setIsAdding(false);
 
     if (added) {
-      toast({
-        title: "Word Added",
-        description: `"${trimmedWord}" has been added to your library.`,
-        action: <CheckCircle className="text-green-500" />,
-      });
+      showStandardToast(toast, 'success', 'Word Added', `"${trimmedWord}" has been added to your library.`);
       setNewWord('');
       setIsPopoverOpen(false);
       setActiveSuggestionIndex(-1);
       setJustSelected(false);
       lastSelectedWordRef.current = '';
     } else {
-      toast({
-        title: "Could Not Add Word",
-        description: `Failed to add "${trimmedWord}".`,
-        variant: "destructive",
-      });
+      showStandardToast(toast, 'error', 'Could Not Add Word', `Failed to add "${trimmedWord}".`);
     }
   }, [newWord, addWord, libraryWords, toast, isLoadingUI]);
 

@@ -22,6 +22,7 @@ import { Due } from '@/components/lexify/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
 import { useWordGameAnswerState } from './useWordGameAnswerState';
 import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 interface ClozeGameProps {
   onStopGame: () => void;
@@ -58,7 +59,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
       const clozeData = await generateClozeQuestion(aiInput);
       if (!core.isMounted.current) return null;
       if (!clozeData || !clozeData.sentence || !clozeData.options || clozeData.options.length < 1) {
-        toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+        showStandardToast(toast, 'error', 'AI Error', 'Could not generate a question.');
         return null;
       }
       let options = [...clozeData.options];
@@ -77,7 +78,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
       };
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && core.isMounted.current) {
-        toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+        showStandardToast(toast, 'error', 'AI Error', 'Could not generate a question.');
       }
       return null;
     }

@@ -1,18 +1,17 @@
 "use client";
 
 import type { FC } from 'react';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import AddWordForm from './AddWordForm';
 import WordFilters from './WordFilters';
 import { useVocabulary } from '@/context/VocabularyContext';
-import type { Word } from '@/types';
-import { Separator } from '@/components/ui/separator';
 import { saveAs } from 'file-saver';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
-import { isDue } from '@/lib/utils';
+import { useFilteredSortedWords, SortOption } from './useFilteredSortedWords';
+import { Separator } from '@/components/ui/separator';
 
 // Dynamic imports with loading fallbacks
 const ImportWordsSection = dynamic(() => import('./ImportWordsSection'), {
@@ -24,54 +23,25 @@ const WordList = dynamic(() => import('./WordList'), {
   loading: () => <div className="h-24 rounded-md border-2 border-dashed flex items-center justify-center text-muted-foreground">Loading word list...</div>
 });
 
-// Type definition for sort options
-type SortOption = 'dateAdded_desc' | 'dateAdded_asc' | 'alphabetical_asc' | 'alphabetical_desc';
-
-// Memoized sort functions to avoid recreating functions on each render
-const sortFunctions = {
-  dateAdded_asc: (a: Word, b: Word) => {
-    const dateA = new Date(a.dateAdded).getTime();
-    const dateB = new Date(b.dateAdded).getTime();
-    return dateA - dateB;
-  },
-  dateAdded_desc: (a: Word, b: Word) => {
-    const dateA = new Date(a.dateAdded).getTime();
-    const dateB = new Date(b.dateAdded).getTime();
-    return dateB - dateA;
-  },
-  alphabetical_asc: (a: Word, b: Word) => a.text.localeCompare(b.text),
-  alphabetical_desc: (a: Word, b: Word) => b.text.localeCompare(a.text)
-};
-
 const LibraryTabContent = () => {
   const { words, isLoading, isSyncing } = useVocabulary();
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState<'New' | 'Learning' | 'Review' | 'Relearning' | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<SortOption>('dateAdded_desc');
-  // Multi-stage filter support
   const [multiStageFilter, setMultiStageFilter] = useState<Array<'New' | 'Learning' | 'Review' | 'Relearning'>>([]);
   const [reviewDueOnly, setReviewDueOnly] = useState(false);
 
-  // Memoized filter function (improved)
-  const filterBySearchAndStage = useCallback((word: Word) => {
-    const matchesSearch = !searchTerm || word.text.toLowerCase().includes(searchTerm.toLowerCase());
-    // Multi-stage filter: if any selected, match any; else fallback to single stage or all
-    const matchesStage = multiStageFilter.length > 0
-      ? multiStageFilter.includes(word.fsrsCard.state)
-      : (stageFilter === 'all' || word.fsrsCard.state === stageFilter);
-    const matchesReviewDue = !reviewDueOnly || isDue(word.fsrsCard.due);
-    return matchesSearch && matchesStage && matchesReviewDue;
-  }, [searchTerm, stageFilter, multiStageFilter, reviewDueOnly]);
+  // Use shared hook for filtering/sorting
+  const { filteredAndSortedWords, filteredCount, totalCount } = useFilteredSortedWords({
+    words,
+    searchTerm,
+    stageFilter,
+    multiStageFilter,
+    reviewDueOnly,
+    sortOrder,
+    isLoading,
+  });
 
-  // Optimized memoized processing of words
-  const filteredAndSortedWords = useMemo(() => {
-    if (!words.length || isLoading) return [];
-    const filteredWords = words.filter(filterBySearchAndStage);
-    return [...filteredWords].sort(sortFunctions[sortOrder]);
-  }, [words, filterBySearchAndStage, sortOrder, isLoading]);
-  const filteredCount = filteredAndSortedWords.length;
-  const totalCount = words.length;
-  
   const handleResetFilters = useCallback(() => {
     setSearchTerm('');
     setStageFilter('all');

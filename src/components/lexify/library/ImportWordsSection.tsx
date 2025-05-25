@@ -8,6 +8,7 @@ import { UploadCloud, FileText, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useVocabulary } from '@/context/VocabularyContext';
 import { useToast } from '@/hooks/use-toast';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_WORDS_TO_PROCESS_AT_ONCE = 5000;
@@ -79,7 +80,7 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
 
   const handleImport = useCallback(async () => {
     if (!selectedFile) {
-      toast({ title: "No File Selected", description: "Please select a file to import.", variant: "destructive" });
+      showStandardToast(toast, 'error', 'No File Selected', 'Please select a file to import.');
       return;
     }
     setIsProcessing(true);
@@ -93,7 +94,7 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
       processedCount = parsedWords.length;
 
       if (processedCount === 0) {
-        toast({ title: "No Valid Words Found", description: "The file did not contain any processable words.", variant: "destructive" });
+        showStandardToast(toast, 'error', 'No Valid Words Found', 'The file did not contain any processable words.');
         setIsProcessing(false);
         return;
       }
@@ -108,15 +109,9 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
 
       if (wordsToAdd.length > 0) {
         const addedCount = await addWordsBatch(wordsToAdd);
-        toast({
-          title: "Import Complete",
-          description: `${addedCount} new word(s) added. ${skippedDuplicateCount} word(s) skipped as duplicates. ${processedCount - wordsToAdd.length - skippedDuplicateCount} word(s) were invalid or already duplicates within the file.`,
-        });
+        showStandardToast(toast, 'success', 'Words Imported', `${addedCount} new word(s) added. ${skippedDuplicateCount} word(s) skipped as duplicates. ${processedCount - wordsToAdd.length - skippedDuplicateCount} word(s) were invalid or already duplicates within the file.`);
       } else {
-        toast({
-          title: "No New Words to Add",
-          description: `All ${processedCount} word(s) from the file were already in your library or duplicates within the file.`,
-        });
+        showStandardToast(toast, 'info', 'No New Words to Add');
       }
 
     } catch (error) {

@@ -21,6 +21,7 @@ import {
 import { FSRS, createEmptyCard, Rating } from 'ts-fsrs';
 import { useToast } from '@/hooks/use-toast';
 import { generateDecoyWords } from '@/lib/generateDecoyWords';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 // Note: Trie and common word list logic (getCommonWordData, CommonWordData, getWordSuggestionsFromLoader)
 // are removed as autocomplete is now handled by useAutocomplete hook.
@@ -104,7 +105,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     const now = Date.now();
     addWordTimestamps.current = addWordTimestamps.current.filter(ts => now - ts < 60000);
     if (addWordTimestamps.current.length >= 10) {
-      toast({ title: 'Rate limit', description: 'You are adding words too quickly. Please wait a moment.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Rate limit', 'You are adding words too quickly. Please wait a moment.');
       return false;
     }
     addWordTimestamps.current.push(now);
@@ -128,7 +129,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return true;
     } catch (error) {
       console.error("[VocabularyContext] Error adding word:", error);
-      toast({ title: 'Error', description: 'Failed to add word. Please try again.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Error', 'Failed to add word. Please try again.');
       if (!user) {
         setWords(prevWords => [newWord, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
       }
@@ -163,7 +164,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return newWords.length;
     } catch (error) {
       console.error("[VocabularyContext] Error adding words batch:", error);
-      toast({ title: 'Error', description: 'Failed to add some words. Please try again.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Error', 'Failed to add some words. Please try again.');
       if (!user) {
         setWords(prevWords => [...newWords, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
       }
@@ -228,7 +229,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return true;
     } catch (error) {
       console.error("[VocabularyContext] Error updating SRS:", error);
-      toast({ title: 'Error', description: 'Failed to update review state. Please try again.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Error', 'Failed to update review state. Please try again.');
       if (!user) {
         setWords(prevWords => prevWords.map(w => w.id === wordId ? { ...w, fsrsCard: (w.fsrsCard || {}) } : w));
       }
@@ -250,7 +251,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return true;
     } catch (error) {
       console.error("[VocabularyContext] Error deleting word:", error);
-      toast({ title: 'Error', description: 'Failed to delete word. Please try again.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Error', 'Failed to delete word. Please try again.');
       if (!user) {
         setWords(prevWords => prevWords.filter(word => word.id !== wordId));
       }

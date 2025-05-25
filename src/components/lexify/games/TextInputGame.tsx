@@ -20,6 +20,7 @@ import { Due } from '@/components/lexify/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
 import { useWordGameAnswerState } from './useWordGameAnswerState';
 import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 interface TextInputGameProps {
   onStopGame: () => void;
@@ -33,6 +34,8 @@ const DEBUG = false; // Set to false in production
 
 // --- Component ---
 const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled }) => {
+  const { toast } = useToast();
+
   const generateSingleQuestion = React.useCallback(async (targetWord: Word, _abortController: AbortController) => {
     try {
       const aiInput = { word: targetWord.text };
@@ -40,6 +43,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
       if (!core.isMounted.current) return null;
       if (!questionData || !questionData.sentenceWithBlank || !questionData.targetWord || !questionData.translatedHint) {
         core.toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+        showStandardToast(toast, 'error', 'AI Error', 'Could not generate a question.');
         return null;
       }
       return {
@@ -51,6 +55,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && core.isMounted.current) {
         core.toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
+        showStandardToast(toast, 'error', 'AI Error', 'Could not generate a question.');
       }
       return null;
     }
@@ -143,7 +148,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
     } else {
       const targetWordObj = core.selectTargetWord();
       if (!targetWordObj) {
-        if (core.isMounted.current) core.toast({ title: "No Words Available", description: "Please add some words to your library first.", variant: "destructive" });
+        if (core.isMounted.current) {
+          core.toast({ title: "No Words Available", description: "Please add some words to your library first.", variant: "destructive" });
+          showStandardToast(toast, 'error', 'No Words Available', 'Please add some words to your library first.');
+        }
         core.setIsLoadingCurrentQuestion(false);
         isLoadingTransition.current = false;
         return;
@@ -208,7 +216,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
     const targetWordObject = core.currentQuestion && 'targetWord' in core.currentQuestion && core.currentQuestion.targetWord ? core.libraryWords.find(w => w.text === core.currentQuestion.targetWord) : undefined;
     const isWordDue = targetWordObject ? isDue(targetWordObject.fsrsCard.due) : false;
     if (currentlyCorrect) {
-      core.toast({ title: "Correct!", description: `"${core.currentQuestion.correctAnswer}" is right!`, className: "bg-green-500 text-white" });
+      showStandardToast(core.toast, 'success', 'Correct!', `"${core.currentQuestion.correctAnswer}" is right!`);
       if (targetWordObject) {
         let rating: number = 3;
         if (currentAttempts === 1 && !answerState.hintUsed) {
@@ -216,11 +224,11 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
         }
         core.updateWordSRS(targetWordObject.id, rating);
         if (isWordDue) {
-          core.toast({ title: "Bonus!", description: "You reviewed this word on time! +1", className: "bg-yellow-400 text-black" });
+          showStandardToast(core.toast, 'info', 'Bonus!', 'You reviewed this word on time! +1');
         }
       }
     } else { 
-      core.toast({ title: "Incorrect", description: `The correct answer was: "${core.currentQuestion.correctAnswer}"`, variant: "destructive" });
+      showStandardToast(core.toast, 'error', 'Incorrect', `The correct answer was: "${core.currentQuestion.correctAnswer}"`);
       if (targetWordObject) {
         core.updateWordSRS(targetWordObject.id, 1);
       }

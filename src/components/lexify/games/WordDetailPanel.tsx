@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { FC } from 'react';
@@ -6,30 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sparkles, Info, Loader2 } from 'lucide-react';
 import type { GeneratedWordDetails } from '@/types';
+import { formatWordDetails } from '@/lib/formatWordDetails';
 
 interface WordDetailPanelProps {
   word: string; // The word being detailed
   generatedDetails: GeneratedWordDetails | null;
   isLoading: boolean;
 }
-
-const formatDetails = (detailsText: string): string => {
-  // Basic markdown to HTML (supports newlines, bold, italic, lists)
-  // Replace **text** with <strong>text</strong>
-  let html = detailsText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // Replace *text* or _text_ with <em>text</em>
-  html = html.replace(/([*_])(.*?)\1/g, '<em>$2</em>');
-  // Replace lists (- item or * item)
-  html = html.replace(/^\s*[-*]\s+(.*)/gm, '<li>$1</li>');
-  html = html.replace(/<\/li>\n<li>/g, '</li><li>'); // Remove newlines between li
-  html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>'); // Wrap LIs in ULs
-  // Replace newlines with <br />, but not inside <ul> or after <li> (handled by block nature)
-  // This regex is a bit tricky; ensures we don't double-br inside lists.
-  // A simple .replace(/\n/g, '<br />') might be okay if AI doesn't make complex lists.
-  // For now, let's rely on whitespace-pre-line and careful AI formatting.
-  return html; // The 'whitespace-pre-line' class will handle newlines mostly.
-};
-
 
 const WordDetailPanel: FC<WordDetailPanelProps> = ({ word, generatedDetails, isLoading }) => {
   if (isLoading) {
@@ -91,7 +73,7 @@ const WordDetailPanel: FC<WordDetailPanelProps> = ({ word, generatedDetails, isL
         <ScrollArea className="h-[300px] md:h-[400px] pr-4">
           <div
             className="prose prose-sm dark:prose-invert max-w-none leading-relaxed whitespace-pre-line"
-            dangerouslySetInnerHTML={{ __html: formatDetails(generatedDetails.details) }}
+            dangerouslySetInnerHTML={{ __html: formatWordDetails(generatedDetails.details) }}
           />
         </ScrollArea>
       </CardContent>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Word } from '@/types';
 import { useMemo } from 'react';
+import { getStageDistribution } from './getStageDistribution';
 
 const DONUT_COLORS: Record<string, string> = {
   New: '#60a5fa', // blue-400
@@ -21,19 +22,7 @@ const LABELS: Record<string, string> = {
 };
 
 const StageDistributionDonutChart: React.FC<{ words: Word[]; isLoading?: boolean }> = ({ words, isLoading }) => {
-  const data = useMemo(() => {
-    const counts: Record<string, number> = { New: 0, Learning: 0, Review: 0, Relearning: 0 };
-    words.forEach(word => { counts[word.fsrsCard.state]++; });
-    const total = words.length || 1;
-    return (Object.keys(counts) as Array<'New' | 'Learning' | 'Review' | 'Relearning'>)
-      .map(state => ({
-        name: LABELS[state],
-        value: counts[state],
-        percent: Math.round((counts[state] / total) * 100),
-        state,
-      }))
-      .filter(item => item.value > 0);
-  }, [words]);
+  const data = useMemo(() => getStageDistribution(words), [words]);
 
   if (isLoading) {
     return (

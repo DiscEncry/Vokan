@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { isDue } from '@/lib/utils';
 import { Due } from './Due';
 import { WordStageIndicator } from '../games/WordStageIndicator';
+import { showStandardToast } from '@/lib/showStandardToast';
 
 interface WordListProps {
   words: Word[];
@@ -64,16 +65,9 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
     if (wordToDelete) {
       const success = await deleteWord(wordToDelete.id);
       if (success) {
-        toast({
-          title: "Word Deleted",
-          description: `"${wordToDelete.text}" has been removed from your library.`,
-        });
+        showStandardToast(toast, 'success', 'Word Deleted', `"${wordToDelete.text}" has been removed from your library.`);
       } else {
-        toast({
-          title: "Error Deleting Word",
-          description: `Could not delete "${wordToDelete.text}". Please try again.`,
-          variant: "destructive",
-        });
+        showStandardToast(toast, 'error', 'Error Deleting Word', `Could not delete "${wordToDelete.text}". Please try again.`);
       }
       setWordToDelete(null);
       setIsAlertOpen(false);
@@ -86,22 +80,23 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
     try {
       if (isLocalOnly) {
         localStorage.removeItem('lexify-vocabulary');
-        toast({ title: 'All Words Deleted', description: 'All words have been removed from your library.' });
+        showStandardToast(toast, 'success', 'All Words Deleted', 'All words have been removed from your library.');
         window.location.reload();
       } else {
         // Cloud: delete all words in parallel for performance
         const results = await Promise.allSettled(words.map(word => deleteWord(word.id)));
         const failed = results.filter(r => r.status === 'rejected').length;
-        toast({
-          title: 'All Words Deleted',
-          description: failed === 0
+        showStandardToast(
+          toast,
+          failed === 0 ? 'success' : 'error',
+          'All Words Deleted',
+          failed === 0
             ? 'All words have been removed from your library.'
-            : `Some words could not be deleted (${failed} failed). Please refresh and try again if needed.`,
-          variant: failed === 0 ? undefined : 'destructive',
-        });
+            : `Some words could not be deleted (${failed} failed). Please refresh and try again if needed.`
+        );
       }
     } catch (e) {
-      toast({ title: 'Error Deleting All Words', description: 'Could not delete all words. Please try again.', variant: 'destructive' });
+      showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
     } finally {
       setIsDeletingAll(false);
       setIsDeleteAllOpen(false);

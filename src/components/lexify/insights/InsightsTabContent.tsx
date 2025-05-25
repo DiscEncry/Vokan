@@ -12,6 +12,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import React from 'react';
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getQuizLog, QuizLogEntry } from '@/lib/utils';
+import { getWordStats } from './getWordStats';
 
 // --- Placeholder implementations for missing functions ---
 function getSessionStats(words: any[]) {
@@ -173,56 +174,8 @@ const CalendarHeatmap: FC = () => {
 
 const InsightsTabContent: FC = () => {
   const { words, isLoading } = useVocabulary();
-  
-  // Memoize derived stats to prevent recalculations on every render
-  const stats = useMemo(() => {
-    if (!words.length) return null;
-    const byState: Record<'New' | 'Learning' | 'Review' | 'Relearning', number> = {
-      New: 0,
-      Learning: 0,
-      Review: 0,
-      Relearning: 0,
-    };
-    let stateSum = 0;
-    let leveledUpToday = 0;
-    let leveledDownToday = 0;
-    let addedToday = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    words.forEach(w => {
-      byState[w.fsrsCard.state]++;
-      // Assign a numeric value for average state
-      const stateScore = w.fsrsCard.state === 'New' ? 1 : w.fsrsCard.state === 'Learning' ? 2 : w.fsrsCard.state === 'Review' ? 3 : 4;
-      stateSum += stateScore;
-      // Leveled up/down today: last_review is today and not New
-      if (w.fsrsCard.last_review) {
-        const reviewedDate = new Date(w.fsrsCard.last_review);
-        reviewedDate.setHours(0, 0, 0, 0);
-        if (reviewedDate.getTime() === today.getTime() && w.fsrsCard.state !== 'New') {
-          if (w.fsrsCard.reviewChange === 'up') {
-            leveledUpToday++;
-          } else if (w.fsrsCard.reviewChange === 'down') {
-            leveledDownToday++;
-          }
-        }
-      }
-      // Words added today
-      const addedDate = new Date(w.dateAdded);
-      addedDate.setHours(0, 0, 0, 0);
-      if (addedDate.getTime() === today.getTime()) {
-        addedToday++;
-      }
-    });
-    const avgState = stateSum / words.length;
-    return {
-      totalWords: words.length,
-      ...byState,
-      avgState,
-      leveledUpToday,
-      leveledDownToday,
-      addedToday,
-    };
-  }, [words]);
+  // Use shared stats utility
+  const stats = useMemo(() => getWordStats(words), [words]);
   
   const sessionStats = useMemo(() => getSessionStats(words), [words]);
   const masteryForecast = useMemo(() => getMasteryForecast(words), [words]);
