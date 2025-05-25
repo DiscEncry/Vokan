@@ -22,70 +22,15 @@ import {
 import { useVocabulary } from '@/context/VocabularyContext';
 import { useToast } from '@/hooks/use-toast';
 import { EmptyState } from "@/components/ui/EmptyState";
+import { isDue } from '@/lib/utils';
+import { Due } from './Due';
+import { WordStageIndicator } from '../games/WordStageIndicator';
 
 interface WordListProps {
   words: Word[];
   isLoading?: boolean;
   emptyMessage?: string; // Optional custom empty state message
 }
-
-const StageIndicator: FC<{ state: 'New' | 'Learning' | 'Review' | 'Relearning' }> = memo(({ state }) => {
-  switch (state) {
-    case 'New':
-      return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700"><Sparkles className="mr-1 h-3 w-3" />New</Badge>;
-    case 'Learning':
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700"><Flame className="mr-1 h-3 w-3" />Learning</Badge>;
-    case 'Review':
-      return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700"><ThumbsUp className="mr-1 h-3 w-3" />Review</Badge>;
-    case 'Relearning':
-      return <Badge variant="default" className="bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900 dark:text-purple-200 dark:border-purple-700"><BadgeCheck className="mr-1 h-3 w-3" />Relearning</Badge>;
-    default:
-      return <Badge variant="secondary"><HelpCircle className="mr-1 h-3 w-3" />Unknown</Badge>;
-  }
-});
-StageIndicator.displayName = 'StageIndicator';
-
-interface WordRowProps {
-  word: Word;
-  onDeleteRequest: (wordId: string, wordText: string) => void;
-}
-
-const isDue = (due: string) => {
-  if (!due) return false;
-  const dueDate = new Date(due);
-  const now = new Date();
-  dueDate.setHours(0,0,0,0);
-  now.setHours(0,0,0,0);
-  return dueDate <= now;
-};
-
-const WordRow: FC<WordRowProps> = memo(({ word, onDeleteRequest }) => (
-  <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
-    <TableCell className="font-medium text-base py-3 flex items-center gap-2">
-      {word.text}
-      {isDue(word.fsrsCard.due) && (
-        <span title="Review due!" className="ml-1 text-orange-500 dark:text-orange-300 animate-pulse">
-          <CalendarClock className="inline h-4 w-4" />
-        </span>
-      )}
-    </TableCell>
-    <TableCell><StageIndicator state={word.fsrsCard.state} /></TableCell>
-    <TableCell className="text-muted-foreground py-3 text-xs">
-      {formatDistanceToNow(new Date(word.dateAdded), { addSuffix: true })}
-    </TableCell>
-    <TableCell className="text-right py-3">
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        onClick={() => onDeleteRequest(word.id, word.text)}
-        aria-label={`Delete word ${word.text}`}
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </Button>
-    </TableCell>
-  </TableRow>
-));
-WordRow.displayName = 'WordRow';
 
 const LoadingSkeleton: FC = () => (
   <div className="space-y-2">
@@ -204,13 +149,9 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
               <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
                 <TableCell className="font-medium text-base py-3 flex items-center gap-2">
                   {word.text}
-                  {isDue(word.fsrsCard.due) && (
-                    <span title="Review due!" className="ml-1 text-orange-500 dark:text-orange-300 animate-pulse">
-                      <CalendarClock className="inline h-4 w-4" />
-                    </span>
-                  )}
+                  <Due isDue={isDue(word.fsrsCard.due)} />
                 </TableCell>
-                <TableCell><StageIndicator state={word.fsrsCard.state} /></TableCell>
+                <TableCell><WordStageIndicator state={word.fsrsCard.state} /></TableCell>
                 <TableCell className="text-muted-foreground py-3 text-xs">
                   {formatDistanceToNow(new Date(word.dateAdded), { addSuffix: true })}
                 </TableCell>

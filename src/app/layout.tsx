@@ -9,6 +9,7 @@ import { ThemeProvider } from "next-themes"; // Added import
 import { GlobalErrorBoundary } from '@/components/ui/GlobalErrorBoundary';
 import { GoogleAnalytics } from '@/components/ui/GoogleAnalytics';
 import AppShell from '@/components/ui/AppShell';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Use Inter as the default sans-serif font
 const fontSans = FontSans({ 
@@ -32,9 +33,11 @@ export default function RootLayout({
         'min-h-screen bg-background font-sans antialiased',
         fontSans.variable
       )}>
-        <AppShell>
-          {children}
-        </AppShell>
+        <TooltipProvider>
+          <AppShell>
+            {children}
+          </AppShell>
+        </TooltipProvider>
       </body>
     </html>
   );

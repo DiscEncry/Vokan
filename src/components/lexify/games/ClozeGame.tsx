@@ -1,16 +1,15 @@
 "use client";
 
 import type { FC } from 'react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, CheckCircle, XCircle, Lightbulb, RefreshCw, StopCircle, Info, Sparkles, CalendarClock } from 'lucide-react'; // Added Sparkles
 import WordDetailPanel from './WordDetailPanel';
 import { useVocabulary } from '@/context/VocabularyContext';
-import type { Word, ClozeQuestion as ClozeQuestionType, GeneratedWordDetails } from '@/types';
+import type { Word, ClozeQuestion as ClozeQuestionType } from '@/types';
 import { generateClozeQuestion } from '@/ai/flows/generate-cloze-question';
-import { generateWordDetails } from '@/ai/flows/generate-word-details';
 import { useToast } from '@/hooks/use-toast';
 import { useGameEngine } from './useGameEngine';
 import { useWordDetails } from './useWordDetails';
@@ -18,6 +17,11 @@ import { useWordDetailsPanelState } from './useWordDetailsPanelState';
 import FamiliarityDot from './FamiliarityDot';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isDue, logQuizResult } from '@/lib/utils';
+import { useWordGameCore } from './useWordGameCore';
+import { Due } from '@/components/lexify/library/Due';
+import { WordStageIndicator } from './WordStageIndicator';
+import { useWordGameAnswerState } from './useWordGameAnswerState';
+import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';
 
 interface ClozeGameProps {
   onStopGame: () => void;
@@ -27,247 +31,98 @@ interface ClozeGameProps {
 const DEBUG = false; // Set to false in production
 
 const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
-  // Use shared game engine hook
-  const {
-    libraryWords,
-    isMounted,
-    gameInitialized,
-    setGameInitialized,
-    safeSetState,
-    hasEnoughWords,
-    selectTargetWord,
-    vocabLoading,
-  } = useGameEngine({ minWords: 4 });
-
-  // Use shared word details hook
-  const wordDetailsApi = useWordDetails();
-  const { showDetails, detailsWord, showPanelForWord, resetPanel } = useWordDetailsPanelState();
-
-  const { updateWordSRS, getDecoyWords } = useVocabulary();
+  const { getDecoyWords, updateWordSRS } = useVocabulary();
   const { toast } = useToast();
 
-  const debugLog = useCallback((...args: any[]) => {
-    if (DEBUG) console.log("[ClozeGame]", ...args);
-  }, []);
-
-  // Question state
-  const [currentQuestion, setCurrentQuestion] = useState<ClozeQuestionType | null>(null);
-  const [nextQuestion, setNextQuestion] = useState<ClozeQuestionType | null>(null);
-  
-  // Game state
+  // Local state for answer selection and focus
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [focusedOptionIndex, setFocusedOptionIndex] = useState<number>(-1);
-  
-  // Option buttons refs for focus management
   const optionButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
-  
-  // Loading states
-  const [isLoadingCurrentQuestion, setIsLoadingCurrentQuestion] = useState(true); // True initially
-  const [isLoadingNextQuestion, setIsLoadingNextQuestion] = useState(false);
-  
-  // Game Lifecycle & Utility State
-  const isLoadingTransition = useRef(false); // NEW: Prevents re-entrant calls to loadCurrentAndPrepareNext
-
-  // Request cancellation refs
-  const currentQuestionAbortController = useRef<AbortController | null>(null);
-  const nextQuestionAbortController = useRef<AbortController | null>(null);
-  const wordDetailsAbortController = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    return () => { 
-      debugLog("Component unmounting, aborting all controllers.");
-      currentQuestionAbortController.current?.abort("Component unmount");
-      nextQuestionAbortController.current?.abort("Component unmount");
-      wordDetailsAbortController.current?.abort("Component unmount");
-    };
-  }, [debugLog]);
-
-  useEffect(() => {
-    if (selectedAnswer || (!isLoadingCurrentQuestion && currentQuestion)) {
-      safeSetState<number>(setFocusedOptionIndex, -1);
-    }
-  }, [isLoadingCurrentQuestion, currentQuestion, selectedAnswer, safeSetState]);
+  const startTime = useRef<number | null>(null);
 
   const generateSingleQuestion = useCallback(async (targetWord: Word, abortController: AbortController): Promise<ClozeQuestionType | null> => {
-    debugLog("generateSingleQuestion for word:", targetWord?.text);
     if (!targetWord) return null;
-
     const decoys = getDecoyWords(targetWord.id, 3);
     if (decoys.length < 3) {
-      if (isMounted.current) {
-        toast({ 
-          title: "Not enough decoy words", 
-          description: `Need at least 3 decoys for "${targetWord.text}", found ${decoys.length}. Add more words.`, 
-          variant: "destructive"
-        });
-      }
+      toast({ 
+        title: "Not enough decoy words", 
+        description: `Need at least 3 decoys for \"${targetWord.text}\", found ${decoys.length}. Add more words.`,
+        variant: "destructive"
+      });
       return null;
     }
-    
     const decoyTexts = decoys.map(d => d.text);
-
     try {
       const aiInput = { word: targetWord.text, libraryWords: decoyTexts };
-      // Only pass one argument as per function signature
       const clozeData = await generateClozeQuestion(aiInput);
-      
-      if (!isMounted.current) return null;
+      if (!core.isMounted.current) return null;
       if (!clozeData || !clozeData.sentence || !clozeData.options || clozeData.options.length < 1) {
-        debugLog("generateSingleQuestion: AI response missing required fields.", clozeData);
-        // Optionally, could add AI failure count here if needed
+        toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
         return null;
       }
-      
       let options = [...clozeData.options];
       if (!options.includes(targetWord.text)) {
-        // Ensure target word is an option, replace a random one if not present
         options[Math.floor(Math.random() * Math.min(options.length, 4))] = targetWord.text;
       }
-      
       const shuffledOptions = options.sort(() => 0.5 - Math.random()).slice(0, 4);
-      
       if (!shuffledOptions.includes(targetWord.text)) {
         shuffledOptions[Math.floor(Math.random() * 4)] = targetWord.text;
       }
-
       return {
         sentenceWithBlank: clozeData.sentence,
         options: shuffledOptions,
-        correctAnswer: targetWord.text, // The AI should confirm the correct form, but here it's usually the same as targetWord
+        correctAnswer: targetWord.text,
         targetWord: targetWord.text,
       };
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError' && isMounted.current) {
-        debugLog("Error in generateSingleQuestion:", error);
+      if (error instanceof Error && error.name !== 'AbortError' && core.isMounted.current) {
         toast({ title: "AI Error", description: "Could not generate a question.", variant: "destructive" });
-      } else if (error instanceof Error && error.name === 'AbortError') {
-        debugLog("generateSingleQuestion: Aborted.");
       }
       return null;
     }
-  }, [getDecoyWords, toast, debugLog, isMounted]);
+  }, [getDecoyWords, toast]);
 
-  const fetchAndStoreNextQuestion = useCallback(async () => {
-    if (vocabLoading || !hasEnoughWords || !isMounted.current || isLoadingNextQuestion) return;
+  const core = useWordGameCore<ClozeQuestionType>({
+    minWords: 4,
+    generateSingleQuestion,
+    getDecoyWords,
+  });
 
-    nextQuestionAbortController.current?.abort("New next question fetch started");
-    nextQuestionAbortController.current = new AbortController();
+  const answerState = useWordGameAnswerState<ClozeQuestionType>();
 
-    const currentTargetWordId = currentQuestion ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined;
-    const excludeIds = currentTargetWordId ? [currentTargetWordId] : [];
-    const nextTargetWordObj = selectTargetWord(excludeIds);
+  // --- Quiz/Game Log Util ---
+  useEffect(() => {
+    return () => { 
+      core.currentQuestionAbortController.current?.abort("Component unmount");
+      core.nextQuestionAbortController.current?.abort("Component unmount");
+    };
+  }, []);
 
-    if (!nextTargetWordObj) {
-      if (hasEnoughWords && isMounted.current) {
-        debugLog("fetchAndStoreNextQuestion: No suitable next word found.");
-      }
-      safeSetState<boolean>(setIsLoadingNextQuestion, false);
-      return;
+  useEffect(() => {
+    if (answerState.userInput || (!core.isLoadingCurrentQuestion && core.currentQuestion)) {
+      core.safeSetState<number>(setFocusedOptionIndex, -1);
     }
-    
-    safeSetState<boolean>(setIsLoadingNextQuestion, true);
-
-    try {
-      const question = await generateSingleQuestion(nextTargetWordObj, nextQuestionAbortController.current);
-      if (isMounted.current) {
-        safeSetState<ClozeQuestionType | null>(setNextQuestion, question);
-      }
-    } catch (error) {
-      // Error handling is in generateSingleQuestion
-    } finally {
-      if (isMounted.current) safeSetState<boolean>(setIsLoadingNextQuestion, false);
-    }
-  }, [
-    vocabLoading, hasEnoughWords, isLoadingNextQuestion, currentQuestion, libraryWords, 
-    selectTargetWord, generateSingleQuestion, debugLog, safeSetState, isMounted
-  ]);
+  }, [core.isLoadingCurrentQuestion, core.currentQuestion, answerState.userInput, core.safeSetState]);
 
   const resetQuestionState = useCallback(() => {
-    debugLog("resetQuestionState called");
-    safeSetState<string | null>(setSelectedAnswer, null);
-    safeSetState<boolean | null>(setIsCorrect, null);
-    safeSetState<number>(setFocusedOptionIndex, -1);
-    resetPanel(); // Use shared hook to reset details panel
+    setSelectedAnswer(null);
+    setIsCorrect(null);
+    setFocusedOptionIndex(-1);
+    core.resetPanel(); // Use shared hook to reset details panel
     optionButtonsRef.current = [];
-  }, [safeSetState, debugLog, resetPanel]);
+  }, [core.resetPanel]);
 
-  const loadCurrentAndPrepareNext = useCallback(async () => {
-    debugLog("loadCurrentAndPrepareNext: Start. isLoadingTransition:", isLoadingTransition.current);
-    if (!isMounted.current || vocabLoading || !hasEnoughWords || isLoadingTransition.current) {
-        if (isLoadingTransition.current) debugLog("Bailing: isLoadingTransition is true");
-        return;
-    }
-    isLoadingTransition.current = true;
-
-    currentQuestionAbortController.current?.abort("New current question load");
-    currentQuestionAbortController.current = new AbortController(); // Create new one for current question
-
-    resetQuestionState();
-    safeSetState<boolean>(setIsLoadingCurrentQuestion, true);
-
-    let questionToLoad: ClozeQuestionType | null = null;
-
-    if (nextQuestion) {
-        debugLog("Using pre-fetched nextQuestion:", nextQuestion.targetWord);
-        questionToLoad = nextQuestion;
-        safeSetState<ClozeQuestionType | null>(setCurrentQuestion, questionToLoad);
-        safeSetState<ClozeQuestionType | null>(setNextQuestion, null);
-        safeSetState<boolean>(setIsLoadingCurrentQuestion, false);
-        fetchAndStoreNextQuestion();
-    } else {
-        debugLog("No pre-fetched nextQuestion. Fetching a new current question.");
-        const currentId = currentQuestion?.targetWord ? libraryWords.find(w => w.text === currentQuestion.targetWord)?.id : undefined;
-        const excludeIds = currentId ? [currentId] : [];
-        const targetWordObj = selectTargetWord(excludeIds);
-        
-        if (!targetWordObj) {
-            if (isMounted.current) toast({ title: "No Words Available", description: "Could not find a suitable word.", variant: "destructive" });
-            safeSetState<boolean>(setIsLoadingCurrentQuestion, false);
-            isLoadingTransition.current = false;
-            return;
-        }
-        try {
-            questionToLoad = await generateSingleQuestion(targetWordObj, currentQuestionAbortController.current);
-            if (isMounted.current) {
-                safeSetState<ClozeQuestionType | null>(setCurrentQuestion, questionToLoad);
-                if (questionToLoad) {
-                    debugLog("Fetched initial current question:", questionToLoad.targetWord);
-                    fetchAndStoreNextQuestion();
-                }
-            }
-        } catch (error) {
-            debugLog("Error in loadCurrentAndPrepareNext (initial fetch):", error);
-        } finally {
-            if (isMounted.current) safeSetState<boolean>(setIsLoadingCurrentQuestion, false);
-        }
-    }
-    isLoadingTransition.current = false;
-    debugLog("loadCurrentAndPrepareNext completed.");
-  }, [
-    vocabLoading, hasEnoughWords, nextQuestion, currentQuestion, libraryWords, selectTargetWord, 
-    generateSingleQuestion, fetchAndStoreNextQuestion, resetQuestionState, 
-    toast, debugLog, safeSetState, isMounted
-  ]);
-
-  // Initial Game Load Effect
-  useEffect(() => {
-    debugLog("Initial load effect: vocabLoading:", vocabLoading, "hasEnoughWords:", hasEnoughWords, "gameInitialized:", gameInitialized);
-    if (!vocabLoading && hasEnoughWords && !gameInitialized && isMounted.current) {
-      loadCurrentAndPrepareNext();
-      safeSetState<boolean>(setGameInitialized, true);
-    }
-  }, [vocabLoading, hasEnoughWords, gameInitialized, loadCurrentAndPrepareNext, debugLog, safeSetState, isMounted]);
+  useEffect(() => { startTime.current = Date.now(); }, [core.currentQuestion]);
 
   const handleAnswerSubmit = useCallback((answer: string) => {
-    if (!currentQuestion || isCorrect !== null || !isMounted.current) return; // Only allow one try
-    debugLog("handleAnswerSubmit for answer:", answer);
+    if (!core.currentQuestion || isCorrect !== null || !core.isMounted.current) return; // Only allow one try
   
-    safeSetState<string | null>(setSelectedAnswer, answer);
-    const correct = answer === currentQuestion.correctAnswer;
-    safeSetState<boolean | null>(setIsCorrect, correct);
+    setSelectedAnswer(answer);
+    const correct = answer === core.currentQuestion.correctAnswer;
+    setIsCorrect(correct);
   
-    const targetWordObject = libraryWords.find(w => w.text === currentQuestion.targetWord);
+    const targetWordObject = core.libraryWords.find(w => w.text === core.currentQuestion?.targetWord);
     const isWordDue = targetWordObject ? isDue(targetWordObject.fsrsCard.due) : false;
   
     if (correct) {
@@ -278,115 +133,111 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
           toast({ title: "Bonus!", description: "You reviewed this word on time! +1", className: "bg-yellow-400 text-black" });
         }
       }
-      showPanelForWord(currentQuestion.targetWord); // Use shared hook
-      wordDetailsApi.fetchDetails(currentQuestion.targetWord);
+      core.showPanelForWord(core.currentQuestion.targetWord); // Use shared hook
+      core.wordDetailsApi.fetchDetails(core.currentQuestion.targetWord);
     } else {
       toast({ title: "Incorrect", description: `"${answer}" is not the right word.`, variant: "destructive" });
       if (targetWordObject) {
         updateWordSRS(targetWordObject.id, 1); // Again
       }
-      showPanelForWord(currentQuestion.targetWord); // Use shared hook
-      wordDetailsApi.fetchDetails(currentQuestion.targetWord);
+      core.showPanelForWord(core.currentQuestion.targetWord); // Use shared hook
+      core.wordDetailsApi.fetchDetails(core.currentQuestion.targetWord);
     }
   
-    if (currentQuestion && startTime.current) {
+    if (core.currentQuestion && startTime.current) {
       logQuizResult({
-        word: currentQuestion.targetWord,
+        word: core.currentQuestion.targetWord,
         correct,
         duration: Date.now() - startTime.current,
         game: 'cloze',
         timestamp: Date.now(),
       });
     }
-  }, [currentQuestion, isCorrect, libraryWords, toast, updateWordSRS, debugLog, safeSetState, isMounted, wordDetailsApi, showPanelForWord]);
-
-  const startTime = useRef<number | null>(null);
-  useEffect(() => { startTime.current = Date.now(); }, [currentQuestion]);
+  }, [core.currentQuestion, isCorrect, core.libraryWords, toast, updateWordSRS, selectedAnswer, core.isMounted, core.wordDetailsApi, core.showPanelForWord]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ') e.preventDefault(); 
+    if (!core.vocabLoading && core.hasEnoughWords && !core.gameInitialized && core.isMounted.current) {
+      core.loadCurrentAndPrepareNext();
+      core.safeSetState<boolean>(core.setGameInitialized, true);
+    }
+  }, [core.vocabLoading, core.hasEnoughWords, core.gameInitialized, core.loadCurrentAndPrepareNext, core.safeSetState, core.isMounted]);
 
-      if (isLoadingCurrentQuestion || !currentQuestion || isLoadingTransition.current) return;
-      
-      if ((e.key === ' ' || e.key === 'Enter') && isCorrect !== null) {
-        if (!isLoadingNextQuestion && !isLoadingTransition.current) {
-          loadCurrentAndPrepareNext();
-        }
-        return;
+  // Reset answer state on new question
+  useEffect(() => {
+    setSelectedAnswer(null);
+    setIsCorrect(null);
+    setFocusedOptionIndex(-1);
+    optionButtonsRef.current = [];
+  }, [core.currentQuestion]);
+
+  // Keyboard navigation and answer submission
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === ' ') e.preventDefault();
+    if (core.isLoadingCurrentQuestion || !core.currentQuestion || core.isLoadingTransition.current) return;
+    if ((e.key === ' ' || e.key === 'Enter') && isCorrect !== null) {
+      if (!core.isLoadingNextQuestion && !core.isLoadingTransition.current) {
+        core.loadCurrentAndPrepareNext();
       }
-
-      if (e.key >= '1' && e.key <= '4') {
-        const index = parseInt(e.key, 10) - 1;
-        if (index >= 0 && index < currentQuestion.options.length) {
-          const option = currentQuestion.options[index];
-          handleAnswerSubmit(option);
-        }
-        return;
-      }
-
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        
-        const optionsCount = currentQuestion.options.length;
-        let newIndex = focusedOptionIndex;
-        const isSmallScreen = window.innerWidth < 640; 
-        
-        const isOptionSelectable = (idx: number) => {
-          if (idx < 0 || idx >= optionsCount) return false;
-          return true;
-        };
-        
-        let currentFocus = focusedOptionIndex === -1 ? (e.key === 'ArrowUp' ? optionsCount : -1) : focusedOptionIndex;
-
-        if (isSmallScreen) { // Vertical navigation
-            if (e.key === 'ArrowUp') {
-                for (let i = currentFocus - 1; i >= 0; i--) if (isOptionSelectable(i)) { newIndex = i; break; }
-            } else if (e.key === 'ArrowDown') {
-                for (let i = currentFocus + 1; i < optionsCount; i++) if (isOptionSelectable(i)) { newIndex = i; break; }
-            }
-        } else { // Grid navigation
-            if (e.key === 'ArrowUp') {
-                if (currentFocus >= 2 && isOptionSelectable(currentFocus - 2)) newIndex = currentFocus - 2;
-            } else if (e.key === 'ArrowDown') {
-                if (currentFocus < optionsCount - 2 && isOptionSelectable(currentFocus + 2)) newIndex = currentFocus + 2;
-            } else if (e.key === 'ArrowLeft') {
-                if (currentFocus % 2 === 1 && isOptionSelectable(currentFocus - 1)) newIndex = currentFocus - 1;
-            } else if (e.key === 'ArrowRight') {
-                if (currentFocus % 2 === 0 && currentFocus + 1 < optionsCount && isOptionSelectable(currentFocus + 1)) newIndex = currentFocus + 1;
-            }
-        }
-        
-        if (focusedOptionIndex === -1 && newIndex === -1 ) { // If no option focused and no movement, try to focus first selectable
-             for (let i = 0; i < optionsCount; i++) if (isOptionSelectable(i)) { newIndex = i; break; }
-        }
-
-        if (newIndex !== -1 && newIndex !== focusedOptionIndex && isOptionSelectable(newIndex)) {
-          safeSetState(setFocusedOptionIndex, newIndex);
-          optionButtonsRef.current[newIndex]?.focus();
-        }
-        return;
-      }
-
-      if (e.key === 'Enter' && focusedOptionIndex >= 0 && focusedOptionIndex < currentQuestion.options.length) {
-        const option = currentQuestion.options[focusedOptionIndex];
+      return;
+    }
+    if (e.key >= '1' && e.key <= '4') {
+      const index = parseInt(e.key, 10) - 1;
+      if (index >= 0 && index < core.currentQuestion.options.length) {
+        const option = core.currentQuestion.options[index];
         handleAnswerSubmit(option);
-        return;
       }
-    };
+      return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const optionsCount = core.currentQuestion.options.length;
+      let newIndex = focusedOptionIndex;
+      const isSmallScreen = window.innerWidth < 640;
+      const isOptionSelectable = (idx: number) => {
+        if (idx < 0 || idx >= optionsCount) return false;
+        return true;
+      };
+      let currentFocus = focusedOptionIndex === -1 ? (e.key === 'ArrowUp' ? optionsCount : -1) : focusedOptionIndex;
+      if (isSmallScreen) {
+        if (e.key === 'ArrowUp') {
+          for (let i = currentFocus - 1; i >= 0; i--) if (isOptionSelectable(i)) { newIndex = i; break; }
+        } else if (e.key === 'ArrowDown') {
+          for (let i = currentFocus + 1; i < optionsCount; i++) if (isOptionSelectable(i)) { newIndex = i; break; }
+        }
+      } else {
+        if (e.key === 'ArrowUp') {
+          if (currentFocus >= 2 && isOptionSelectable(currentFocus - 2)) newIndex = currentFocus - 2;
+        } else if (e.key === 'ArrowDown') {
+          if (currentFocus < optionsCount - 2 && isOptionSelectable(currentFocus + 2)) newIndex = currentFocus + 2;
+        } else if (e.key === 'ArrowLeft') {
+          if (currentFocus % 2 === 1 && isOptionSelectable(currentFocus - 1)) newIndex = currentFocus - 1;
+        } else if (e.key === 'ArrowRight') {
+          if (currentFocus % 2 === 0 && currentFocus + 1 < optionsCount && isOptionSelectable(currentFocus + 1)) newIndex = currentFocus + 1;
+        }
+      }
+      if (focusedOptionIndex === -1 && newIndex === -1 ) {
+        for (let i = 0; i < optionsCount; i++) if (isOptionSelectable(i)) { newIndex = i; break; }
+      }
+      if (newIndex !== -1 && newIndex !== focusedOptionIndex && isOptionSelectable(newIndex)) {
+        setFocusedOptionIndex(newIndex);
+        optionButtonsRef.current[newIndex]?.focus();
+      }
+      return;
+    }
+    if (e.key === 'Enter' && focusedOptionIndex >= 0 && focusedOptionIndex < core.currentQuestion.options.length) {
+      const option = core.currentQuestion.options[focusedOptionIndex];
+      handleAnswerSubmit(option);
+      return;
+    }
+  }, [core, isCorrect, focusedOptionIndex, handleAnswerSubmit]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    currentQuestion, focusedOptionIndex, isCorrect, isLoadingCurrentQuestion, isLoadingNextQuestion, 
-    loadCurrentAndPrepareNext, handleAnswerSubmit, safeSetState
-  ]);
+  useWordGameKeyboardNavigation(handleKeyDown, [core, isCorrect, focusedOptionIndex, handleAnswerSubmit]);
 
-  if (vocabLoading) {
+  if (core.vocabLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-2">Loading vocabulary...</span></div>;
   }
 
-  if (!hasEnoughWords && !vocabLoading && !gameInitialized) {
+  if (!core.hasEnoughWords && !core.vocabLoading && !core.gameInitialized) {
     return (
       <EmptyState
         title="Not Enough Words"
@@ -406,22 +257,18 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
         <CardHeader className="relative">
           {/* Indicators in top left */}
           {(() => {
-            const wordObj = currentQuestion && libraryWords.find(w => w.text === currentQuestion.targetWord);
+            const wordObj = core.libraryWords.find(w => w.text === core.currentQuestion?.targetWord);
             if (!wordObj) return null;
             return (
               <div className="absolute -top-3 -left-3 flex gap-1 z-10">
-                <FamiliarityDot state={wordObj.fsrsCard.state} />
-                {isDue(wordObj.fsrsCard.due) && (
-                  <span title="Review due!" className="text-orange-500 dark:text-orange-300 animate-pulse">
-                    <CalendarClock className="inline h-4 w-4" />
-                  </span>
-                )}
+                <WordStageIndicator state={wordObj.fsrsCard.state} />
+                <Due isDue={isDue(wordObj.fsrsCard.due)} />
               </div>
             );
           })()}
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl">Cloze Test</CardTitle>
-            {(isLoadingNextQuestion) && ( // Simplified loading indicator
+            {(core.isLoadingNextQuestion) && ( // Simplified loading indicator
               <div className="flex items-center text-xs text-muted-foreground">
                 <Sparkles className="h-4 w-4 text-primary mr-1" /> 
                 <span>Preparing next...</span>
@@ -433,25 +280,26 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {isLoadingCurrentQuestion && !currentQuestion && ( // Show if loading and no current question yet
+          {core.isLoadingCurrentQuestion && !core.currentQuestion && ( // Show if loading and no current question yet
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
               <p className="ml-3 text-lg text-muted-foreground">Generating question...</p>
             </div>
           )}
           
-          {!isLoadingCurrentQuestion && currentQuestion && (
+          {!core.isLoadingCurrentQuestion && core.currentQuestion && (
             <>
               <div className="flex items-center justify-center gap-2 mb-2">
                 {/* This p tag was missing a closing tag, now fixed */}
                 <p className="text-xl md:text-2xl text-center p-6 bg-muted rounded-lg shadow-inner min-h-[100px] flex items-center justify-center mb-0">
-                  {currentQuestion.sentenceWithBlank.replace(/___/g, " ______ ")}
+                  {core.currentQuestion.sentenceWithBlank.replace(/___/g, " ______ ")}
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {currentQuestion.options.map((option, index) => {
+                {core.currentQuestion.options.map((option, index) => {
                   const isSelected = selectedAnswer === option;
                   const isAttemptedIncorrect = false; // Not tracking attemptedAnswers in new version
+                  // Only disable if isCorrect is not null AND this is the same question
                   const isDisabled = isCorrect !== null;
                   const isFocused = focusedOptionIndex === index;
                   let buttonVariant = 'outline';
@@ -471,7 +319,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
                       size="lg"
                       className={buttonClass}
                       onClick={() => handleAnswerSubmit(option)}
-                      onFocus={() => !isDisabled && safeSetState(setFocusedOptionIndex, index)}
+                      onFocus={() => !isDisabled && core.safeSetState(setFocusedOptionIndex, index)}
                       ref={el => { optionButtonsRef.current[index] = el ?? null; }}
                       disabled={isDisabled}
                       aria-label={`Option ${index + 1}: ${option}`}
@@ -487,16 +335,16 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
             </>
           )}
           
-          {!isLoadingCurrentQuestion && !currentQuestion && !vocabLoading && gameInitialized && !isLoadingTransition.current && (
+          {!core.isLoadingCurrentQuestion && !core.currentQuestion && !core.vocabLoading && core.gameInitialized && !core.isLoadingTransition.current && (
             <EmptyState
               title="No Question Available"
               description={<>Could not load a question. You might need more words, or there was an AI issue.</>}
               icon={<Info className="h-5 w-5" />}
             >
               <Button 
-                onClick={loadCurrentAndPrepareNext}
+                onClick={core.loadCurrentAndPrepareNext}
                 className="mt-3" 
-                disabled={isLoadingTransition.current || isLoadingCurrentQuestion || disabled}
+                disabled={core.isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion || disabled}
                 aria-label="Try Again"
               >
                 <RefreshCw className="mr-2 h-4 w-4" /> Try Again
@@ -512,22 +360,22 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
         
         <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4">
           <Button onClick={onStopGame} variant="outline" size="lg" className="w-full sm:w-auto"
-            disabled={isLoadingTransition.current || disabled}
+            disabled={core.isLoadingTransition.current || disabled}
             aria-label="Stop Game"
           >
             <StopCircle className="mr-2 h-5 w-5" /> Stop Game
           </Button>
           
-          {isCorrect !== null && currentQuestion && (
+          {isCorrect !== null && core.currentQuestion && (
             <Button 
-              onClick={loadCurrentAndPrepareNext} 
+              onClick={core.loadCurrentAndPrepareNext} 
               className="w-full sm:w-auto" 
               size="lg" 
               variant="default" 
-              disabled={isLoadingTransition.current || isLoadingCurrentQuestion || isLoadingNextQuestion || disabled}
+              disabled={core.isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion || disabled}
               aria-label="Next Question"
             >
-              {(isLoadingTransition.current || isLoadingCurrentQuestion || isLoadingNextQuestion) ? (
+              {(core.isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion) ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-5 w-4" />
@@ -538,11 +386,11 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
         </CardFooter>
       </Card>
 
-      {showDetails && detailsWord && (
+      {core.showDetails && core.detailsWord && (
         <WordDetailPanel 
-          word={detailsWord} 
-          generatedDetails={wordDetailsApi.getDetails(detailsWord)} 
-          isLoading={wordDetailsApi.isLoading} 
+          word={core.detailsWord} 
+          generatedDetails={core.wordDetailsApi.getDetails(core.detailsWord)} 
+          isLoading={core.wordDetailsApi.isLoading} 
         />
       )}
       {/* DEBUG && renderDebugInfo() could be added here if needed */}

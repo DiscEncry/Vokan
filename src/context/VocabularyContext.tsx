@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { FSRS, createEmptyCard, Rating } from 'ts-fsrs';
 import { useToast } from '@/hooks/use-toast';
+import { generateDecoyWords } from '@/lib/generateDecoyWords';
 
 // Note: Trie and common word list logic (getCommonWordData, CommonWordData, getWordSuggestionsFromLoader)
 // are removed as autocomplete is now handled by useAutocomplete hook.
@@ -264,9 +265,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
   }, [words]);
 
   const getDecoyWords = useCallback((targetWordId: string, count: number): Word[] => {
-    const availableCount = Math.min(count, words.length > 0 ? words.length - 1 : 0);
-    if (availableCount <= 0) return [];
-    return words.filter(word => word.id !== targetWordId).sort(() => 0.5 - Math.random()).slice(0, availableCount);
+    return generateDecoyWords(words, targetWordId, count);
   }, [words]);
 
   const contextValue = {

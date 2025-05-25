@@ -37,3 +37,20 @@ export function logQuizResult(
     localStorage.setItem(QUIZ_LOG_KEY, JSON.stringify(prev));
   } catch {}
 }
+
+export type QuizLogEntry = {
+  word: string;
+  correct: boolean;
+  duration: number;
+  game: string;
+  timestamp: number;
+};
+
+export function getQuizLog(): QuizLogEntry[] {
+  const QUIZ_LOG_KEY = "lexify-quiz-log-v1";
+  try {
+    return JSON.parse(localStorage.getItem(QUIZ_LOG_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}

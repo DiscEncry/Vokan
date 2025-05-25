@@ -12,6 +12,7 @@ import { saveAs } from 'file-saver';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
+import { isDue } from '@/lib/utils';
 
 // Dynamic imports with loading fallbacks
 const ImportWordsSection = dynamic(() => import('./ImportWordsSection'), {
@@ -51,16 +52,6 @@ const LibraryTabContent = () => {
   const [multiStageFilter, setMultiStageFilter] = useState<Array<'New' | 'Learning' | 'Review' | 'Relearning'>>([]);
   const [reviewDueOnly, setReviewDueOnly] = useState(false);
 
-  // Helper: is a word review due? (match icon logic: only due date, not state)
-  const isReviewDue = (word: Word) => {
-    if (!word.fsrsCard.due) return false;
-    const dueDate = new Date(word.fsrsCard.due);
-    const today = new Date();
-    dueDate.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-    return dueDate <= today;
-  };
-
   // Memoized filter function (improved)
   const filterBySearchAndStage = useCallback((word: Word) => {
     const matchesSearch = !searchTerm || word.text.toLowerCase().includes(searchTerm.toLowerCase());
@@ -68,7 +59,7 @@ const LibraryTabContent = () => {
     const matchesStage = multiStageFilter.length > 0
       ? multiStageFilter.includes(word.fsrsCard.state)
       : (stageFilter === 'all' || word.fsrsCard.state === stageFilter);
-    const matchesReviewDue = !reviewDueOnly || isReviewDue(word);
+    const matchesReviewDue = !reviewDueOnly || isDue(word.fsrsCard.due);
     return matchesSearch && matchesStage && matchesReviewDue;
   }, [searchTerm, stageFilter, multiStageFilter, reviewDueOnly]);
 

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, ArrowDownUp, RotateCcw } from 'lucide-react';
+import { isDue } from '@/lib/utils';
 
 interface WordFiltersProps {
   searchTerm: string;

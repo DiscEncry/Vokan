@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Word } from '@/types';
 import { useVocabulary } from '@/context/VocabularyContext';
+import { isDue } from '@/lib/utils';
 
 /**
  * Shared game engine hook for word-based games (Cloze, TextInput, etc).
@@ -25,15 +26,6 @@ export function useGameEngine({ minWords = 1, excludeWordIds = [] }: { minWords?
   // Word selection logic
   const hasEnoughWords = libraryWords.length >= minWords;
   
-  const isDue = (due: string) => {
-    if (!due) return false;
-    const dueDate = new Date(due);
-    const now = new Date();
-    dueDate.setHours(0,0,0,0);
-    now.setHours(0,0,0,0);
-    return dueDate <= now;
-  };
-
   const selectTargetWord = useCallback((excludeIds: string[] = []) => {
     if (!hasEnoughWords) return null;
     let eligible = libraryWords.filter(w => !excludeIds.includes(w.id));

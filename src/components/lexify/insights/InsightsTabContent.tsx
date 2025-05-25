@@ -11,6 +11,25 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React from 'react';
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getQuizLog, QuizLogEntry } from '@/lib/utils';
+
+// --- Placeholder implementations for missing functions ---
+function getSessionStats(words: any[]) {
+  // Example: return total words and session time (dummy)
+  return {
+    totalWords: words.length,
+    sessionTime: 0,
+  };
+}
+
+function getMasteryForecast(words: any[]) {
+  // Example: return dummy forecast values
+  return {
+    estDaysToMastery: null,
+    avgLeveledUp: 0,
+    notMastered: words.length,
+  };
+}
 
 // Error fallback component for charts
 const ChartErrorFallback: FC<{ error: Error; resetErrorBoundary: () => void }> = ({ error }) => (
