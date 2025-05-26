@@ -14,14 +14,17 @@ import {
   linkWithCredential,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
+import { createUserProfile } from '@/lib/firebase/userProfile';
+import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
+import type { UserProfile } from '@/types/userProfile';
 
 // Update AuthContextType to match new signInWithProvider signature
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  signInWithProvider: (provider: 'google', passwordToLink?: string) => Promise<User | null | { needsPassword?: boolean; email?: string; error?: string }>;
+  signInWithProvider: (provider: 'google', passwordToLink?: string) => Promise<User | null | { needsPassword?: boolean; email?: string; error?: string; uid?: string }>;
   signInWithEmail: (email: string, password: string) => Promise<User | null>;
-  registerWithEmail: (email: string, password: string) => Promise<User | null | { error: string }>;
+  registerWithEmail: (email: string, password: string, username?: string) => Promise<User | null | { error: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -53,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = async (
     providerType: 'google',
     passwordToLink?: string // Optional: for linking password after Google sign-in
-  ): Promise<User | null | { needsPassword?: boolean; email?: string; error?: string }> => {
+  ): Promise<User | null | { needsPassword?: boolean; email?: string; error?: string; uid?: string }> => {
     try {
       if (!auth) {
         console.error('Firebase auth is not initialized');
@@ -73,6 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const email = result.user.email!;
         const methods = await fetchSignInMethodsForEmail(auth, email);
         if (!methods.includes('password') && !passwordToLink) {
+          // If this is a new Google user (no password, no profile), return uid/email for username prompt
+          if (result.user.metadata.creationTime === result.user.metadata.lastSignInTime) {
+            return { uid: result.user.uid, email: result.user.email ?? undefined };
+          }
           // Prompt user to set a password
           return { needsPassword: true, email };
         }
@@ -131,16 +138,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Register with email/password
   const registerWithEmail = async (
     email: string,
-    password: string
+    password: string,
+    username?: string
   ): Promise<User | null | { error: string }> => {
     try {
       if (!auth) {
         console.error('Firebase auth is not initialized');
         return { error: 'Internal error: Auth not initialized.' };
       }
+      if (!username) {
+        return { error: 'Username is required.' };
+      }
+      // Check for duplicate username
+      const exists = await checkUsernameExists(username);
+      if (exists) {
+        return { error: 'Username is already taken.' };
+      }
       setIsLoading(true);
       const result = await createUserWithEmailAndPassword(auth, email, password);
-      return result.user;
+      // Create user profile in Firestore
+      const user = result.user;
+      const profile: UserProfile = {
+        uid: user.uid,
+        email: user.email!,
+        username,
+        createdAt: new Date().toISOString(),
+        provider: 'password',
+      };
+      await createUserProfile(profile);
+      return user;
     } catch (error: any) {
       let errorMsg = 'Registration failed.';
       if (error?.code === 'auth/email-already-in-use') {
