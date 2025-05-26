@@ -142,7 +142,7 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
           <TableBody>
             {pagedWords.map((word) => (
               <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
-                <TableCell className="font-medium text-base py-3 flex items-center gap-2">
+                <TableCell className="font-medium text-base py-3 flex items-center gap-2 h-14 min-h-[3.5rem]"> {/* h-14 = 56px, matches ROW_HEIGHT */}
                   {word.text}
                   <Due isDue={isDue(word.fsrsCard.due)} />
                 </TableCell>
