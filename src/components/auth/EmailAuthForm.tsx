@@ -3,8 +3,11 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
+import zxcvbn from "zxcvbn";
+import axios from "axios";
 
 export default function EmailAuthForm({ onAuthSuccess }: { onAuthSuccess?: () => void }) {
   const { isLoading, signInWithEmail, registerWithEmail } = useAuth();
@@ -14,6 +17,30 @@ export default function EmailAuthForm({ onAuthSuccess }: { onAuthSuccess?: () =>
   const [confirm, setConfirm] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordStrength, setPasswordStrength] = useState<number>(0);
+  const [breached, setBreached] = useState<boolean | null>(null);
+
+  // Check password strength and breach status
+  const handlePasswordChange = async (val: string) => {
+    setPassword(val);
+    const result = zxcvbn(val);
+    setPasswordStrength(result.score);
+    // Breached password check (k-anonymity, partial hash)
+    if (val.length >= 8) {
+      const sha1 = await window.crypto.subtle.digest('SHA-1', new TextEncoder().encode(val));
+      const hash = Array.from(new Uint8Array(sha1)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      const prefix = hash.slice(0, 5);
+      const suffix = hash.slice(5);
+      try {
+        const res = await axios.get(`https://api.pwnedpasswords.com/range/${prefix}`);
+        setBreached(res.data.includes(suffix));
+      } catch {
+        setBreached(null); // API error
+      }
+    } else {
+      setBreached(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,41 +75,57 @@ export default function EmailAuthForm({ onAuthSuccess }: { onAuthSuccess?: () =>
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-2">
+      <Label htmlFor="email">Email</Label>
       <Input
+        id="email"
         type="email"
-        placeholder="Email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        autoComplete="email"
         required
+        autoComplete="email"
       />
       {isRegister && (
-        <Input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
-          autoComplete="username"
-          required
-        />
+        <>
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            type="text"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+            autoComplete="username"
+          />
+        </>
       )}
+      <Label htmlFor="password">Password</Label>
       <Input
+        id="password"
         type="password"
         placeholder="Password"
         value={password}
-        onChange={e => setPassword(e.target.value)}
-        autoComplete={isRegister ? "new-password" : "current-password"}
+        onChange={e => handlePasswordChange(e.target.value)}
         required
+        autoComplete="new-password"
       />
+      {/* Password strength meter */}
+      <div className="text-xs">
+        Strength: {["Too weak", "Weak", "Fair", "Good", "Strong"][passwordStrength]}
+        {breached === true && <span className="text-red-500 ml-2">Breached password!</span>}
+        {breached === false && <span className="text-green-600 ml-2">Not found in breaches</span>}
+      </div>
       {isRegister && (
-        <Input
-          type="password"
-          placeholder="Retype Password"
-          value={confirm}
-          onChange={e => setConfirm(e.target.value)}
-          autoComplete="new-password"
-          required
-        />
+        <>
+          <Label htmlFor="confirm">Confirm Password</Label>
+          <Input
+            id="confirm"
+            type="password"
+            placeholder="Confirm password"
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            required
+            autoComplete="new-password"
+          />
+        </>
       )}
       {error && <div className="text-red-500 text-xs">{error}</div>}
       <Button type="submit" variant="default" size="sm" disabled={isLoading}>

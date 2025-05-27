@@ -47,8 +47,19 @@ export default function AccountLinkingForm() {
     }
   };
 
+  // Helper: get linked providers
+  const getLinkedProviders = () => {
+    if (!user) return [];
+    return (user.providerData || []).map(p => p.providerId);
+  };
+  const linkedProviders = getLinkedProviders();
+
   return (
     <div className="flex flex-col gap-4 p-2 max-w-sm">
+      {/* Show linked providers */}
+      <div className="text-xs text-gray-600 mb-2">
+        Linked: {linkedProviders.length > 0 ? linkedProviders.join(", ") : "None"}
+      </div>
       <form onSubmit={handleLinkPassword} className="flex flex-col gap-2">
         <div className="font-semibold">Link Email/Password</div>
         <Input type="email" value={email} disabled />

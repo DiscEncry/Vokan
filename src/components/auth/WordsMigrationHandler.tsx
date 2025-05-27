@@ -102,8 +102,22 @@ export function WordsMigrationHandler() {
     setShowDialog(false);
   };
   
-  // Only render the dialog if needed
-  if (!showDialog) return null;
+  // Listen for a global event to re-check migration dialog (after Google username dialog closes)
+  useEffect(() => {
+    const handler = () => {
+      if (user) {
+        setShowDialog(false); // Reset first
+        setTimeout(() => {
+          setShowDialog(true);
+        }, 100); // Small delay to ensure state updates
+      }
+    };
+    window.addEventListener('check-migration-dialog', handler);
+    return () => window.removeEventListener('check-migration-dialog', handler);
+  }, [user]);
+  
+  // Only render the dialog if needed and if not showing Google username dialog
+  if (!showDialog || window?.__showingGoogleUsernameDialog) return null;
   
   return (
     <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
