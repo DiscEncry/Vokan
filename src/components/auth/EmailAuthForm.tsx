@@ -39,11 +39,6 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
     }
   }, [formData.password, isRegistering, validate]);
 
-  // Clear auth errors when switching modes
-  useEffect(() => {
-    clearError();
-  }, [isRegistering, clearError]);
-
   // Compute validation state
   const validationState = useMemo(() => {
     if (isRegistering) {
@@ -80,10 +75,8 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    clearError();
-
+    // Do NOT clearError here; let errors show after failed submit
     if (!validationState.isValid) return;
-
     try {
       if (isRegistering) {
         const result = await registerWithEmail(
@@ -117,11 +110,13 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
   // Form field handlers
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    clearError(); // Clear error on field change
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const toggleMode = () => {
     onToggleModeAction();
+    clearError(); // Clear error on mode toggle
     setFormData({ email: "", password: "", username: "", confirm: "" });
   };
 
@@ -255,17 +250,20 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
           </>
         )}
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        className="w-full"
-        onClick={toggleMode}
-        disabled={isLoading}
-      >
-        {isRegistering
-          ? "Already have an account? Sign in"
-          : "Need an account? Create one"}
-      </Button>
+      {/* Modern, centered, gray, slightly larger toggle text */}
+      <div className="w-full flex justify-center mt-4">
+        <button
+          type="button"
+          onClick={toggleMode}
+          disabled={isLoading}
+          className="text-sm text-gray-400 hover:text-gray-600 hover:underline transition-colors font-medium bg-transparent border-none p-0 m-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: "none" }}
+        >
+          {isRegistering
+            ? "Already have an account? Sign in"
+            : "Need an account? Create one"}
+        </button>
+      </div>
     </form>
   );
 }

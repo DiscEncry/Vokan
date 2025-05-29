@@ -17,6 +17,7 @@ import { auth } from '@/lib/firebase/firebaseConfig';
 import { createUserProfile } from '@/lib/firebase/userProfile';
 import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
+import { checkAndUpdateRateLimit } from "@/ai/flows/rateLimitFirestore";
 
 // In-memory brute-force protection (per session, per email)
 const MAX_FAILED_ATTEMPTS = 5;
@@ -204,6 +205,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const RATE_LIMIT_ATTEMPTS = 10;
+  const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
   const signInWithEmail = async (
     email: string,
     password: string
@@ -212,10 +216,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_ERROR', error: `Too many failed attempts. Try again in 5 minutes.` });
       return null;
     }
+    // Server-side rate limit check
+    const rateLimitKey = `signin_${email.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+    try {
+      const rateLimit = await checkAndUpdateRateLimit({
+        key: rateLimitKey,
+        limit: RATE_LIMIT_ATTEMPTS,
+        windowMs: RATE_LIMIT_WINDOW_MS,
+      });
+      if (!rateLimit.allowed) {
+        const retrySec = Math.ceil((rateLimit.retryAfter || 0) / 1000);
+        dispatch({ type: 'SET_ERROR', error: `Too many sign-in attempts. Try again in ${retrySec} seconds.` });
+        return null;
+      }
+    } catch (e) {
+      // If rate limit check fails, fail safe (allow sign-in, but log error)
+      console.error('Rate limit check failed', e);
+    }
     return withRequestDeduplication(`signIn_email_${email}`, async () => {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        resetFailedAttempts(email);
+      try {      if (!auth) throw new Error('Internal error: Auth not initialized.');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      resetFailedAttempts(email);
         dispatch({ type: 'SET_USER', user: userCredential.user });
         dispatch({ type: 'SET_ERROR', error: null });
         return userCredential.user;

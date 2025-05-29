@@ -140,12 +140,13 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Show dialog for Google users without a username
+    // Show dialog ONLY for new Google users without a username
     if (
       user &&
       user.providerData.some(p => p.providerId === "google.com") &&
       !profileLoading &&
-      (!profile || !profile.username)
+      (!profile || !profile.username) &&
+      user.metadata.creationTime === user.metadata.lastSignInTime // Only new users
     ) {
       setPendingGoogleProfile({ email: user.email || "", uid: user.uid });
       setShowGoogleUsernameDialog(true);
