@@ -36,7 +36,6 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@sentry/nextjs": "^9.22.0",
-    "@simplewebauthn/server": "^13.1.1",
     "@tanstack-query-firebase/react": "^1.0.5",
     "@tanstack/react-query": "^5.66.0",
     "argon2": "^0.43.0",
@@ -66,7 +65,7 @@
     "ts-fsrs": "^5.0.0",
     "uuid": "^10.0.0",
     "wordlist-english": "*",
-    "zod": "^3.24.2",
+    "zod": "^3.25.34",
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {

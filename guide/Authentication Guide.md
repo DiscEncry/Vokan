@@ -16,7 +16,7 @@ This is a comprehensive analysis of how to make your Firebase-based authenticati
 # Password Strength & Validation
 
 * **Password policy:** Enforce a strong password policy. In the Firebase Console (Authentication → Settings → Password policy), require a mix of uppercase, lowercase, numbers, symbols and a minimum length (8–12+ characters). Consider “notify” mode first (warn if weak) to avoid locking out existing users. Use real-time strength indicators (like zxcvbn) so users choose strong passphrases.
-* **Compromised lists:** Check new passwords against known-breached password lists (e.g. haveibeenpwned API) on the client or via Cloud Functions; reject or warn on common passwords. Use Google One Tap / password manager integration to encourage unique strong passwords.
+* **No breach check:** Users are responsible for checking if their password has been breached (e.g. using haveibeenpwned.com or a password manager). The app does not check passwords against breach lists.
 * **Passwordless options:** As an alternative to typing passwords, consider offering “email link” (magic link) sign-in, or OAuth with Google (save passwords). Encouraging federated login or passkeys can greatly reduce weak-password issues.
 * **API protection:** Restrict your Firebase API keys to prevent abuse. For web, use a key bound to your domain; for mobile, to your app’s bundle ID. This limits attackers from using your API key elsewhere. Also, tighten quotas on the Identity Toolkit API (Auth endpoints) to prevent brute-force attacks.
 
@@ -96,21 +96,18 @@ This is a comprehensive analysis of how to make your Firebase-based authenticati
 * **Secure environment variables:** If using Cloud Functions, do NOT embed secrets in code. Use Secret Manager or function config for any API keys. The Firebase Admin SDK should use default credentials.
 * **Regular audits:** Periodically review your rules and remove any overly permissive entries. Use the Firebase Console’s “Rules” tab to review syntax and linting warnings.
 
-# Passkey (WebAuthn) Support
+# Future Enhancements
 
-* **Passwordless authentication:** Consider adding support for Passkeys (WebAuthn/FIDO2) to enable passwordless, phishing-resistant sign-in. This is the new industry standard for secure authentication and is supported by most modern browsers and devices.
-* **Implementation overview:**
-  * Use the [WebAuthn API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API) on the client to register and authenticate users with platform or cross-platform authenticators (e.g., device biometrics, security keys).
-  * On registration, generate a WebAuthn credential and store the public key in your backend (e.g., Firestore, associated with the user's UID).
-  * On login, use WebAuthn to verify the user's credential and, if successful, sign them in by issuing a Firebase custom token (using a Cloud Function or backend server).
-  * Use the Firebase Admin SDK to mint custom tokens for users authenticated via WebAuthn, allowing seamless integration with your existing Firebase Auth flows.
-* **User experience:**
-  * Offer Passkey as a sign-in/sign-up option alongside email/password and Google.
-  * Clearly explain the benefits (no password, phishing-resistant, works with biometrics or security keys).
-  * Allow users to manage their Passkeys (add/remove) in account settings.
-* **Resources:**
-  * [WebAuthn Guide (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)
-  * [Firebase Custom Auth with WebAuthn Example](https://github.com/firebaseextended/custom-auth-web)
-  * [Passkeys.dev](https://passkeys.dev/)
+## Passkey (WebAuthn) Authentication
 
-**Resources:** See the official Firebase docs for guidance: [Account Linking](https://firebase.google.com/docs/auth/web/account-linking), [MFA Setup](https://firebase.google.com/docs/auth/web/multi-factor), [Password Policy](https://firebase.google.com/docs/auth/admin/manage-sessions#configure_password_policy), [Security Checklist](https://firebase.google.com/support/guides/security-checklist), and [FirebaseUI Auth](https://firebase.google.com/docs/auth/web/firebaseui) for reference and code examples. These cover best practices and can be customized for your app.
+The Passkey (WebAuthn) authentication feature has been moved to future development. This will provide a more secure, passwordless authentication option using the WebAuthn standard.
+
+When implemented, this feature will:
+- Enable passwordless, phishing-resistant sign-in using device biometrics or security keys
+- Support both platform authenticators (device biometrics) and cross-platform authenticators (security keys)
+- Integrate with Firebase Custom Authentication for seamless auth flow
+
+For future reference, implementation will be based on:
+- [WebAuthn Guide (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)
+- [Firebase Custom Auth with WebAuthn Example](https://github.com/firebaseextended/custom-auth-web)
+- [Passkeys.dev](https://passkeys.dev/)**Resources:** See the official Firebase docs for guidance: [Account Linking](https://firebase.google.com/docs/auth/web/account-linking), [MFA Setup](https://firebase.google.com/docs/auth/web/multi-factor), [Password Policy](https://firebase.google.com/docs/auth/admin/manage-sessions#configure_password_policy), [Security Checklist](https://firebase.google.com/support/guides/security-checklist), and [FirebaseUI Auth](https://firebase.google.com/docs/auth/web/firebaseui) for reference and code examples. These cover best practices and can be customized for your app.

@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { Loader2 } from "lucide-react";
 import { showStandardToast } from '@/lib/showStandardToast';
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 const STORAGE_KEY = 'lexify-vocabulary';
 
 export function WordsMigrationHandler() {
   const { user } = useAuth();
+  const { profile, loading: profileLoading } = useUserProfile();
   const { toast } = useToast();
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [isLoadingLocalWords, setIsLoadingLocalWords] = useState(false);
@@ -28,6 +30,10 @@ export function WordsMigrationHandler() {
         setIsLoadingLocalWords(true);
         
         try {
+          if (!firestore) {
+            setIsLoadingLocalWords(false);
+            return;
+          }
           // Try to load local words from localStorage
           const storedData = localStorage.getItem(STORAGE_KEY);
           if (!storedData) {
@@ -44,6 +50,7 @@ export function WordsMigrationHandler() {
             
             if (!alreadyMigrated) {
               // Check if the user already has words in Firestore
+              if (!firestore) return;
               const wordsCollection = collection(firestore, `users/${user.uid}/words`);
               const snapshot = await getDocs(wordsCollection);
               
@@ -74,6 +81,11 @@ export function WordsMigrationHandler() {
     
     try {
       // Use a batch of promises to efficiently upload all words
+      if (!firestore) {
+        setIsMigrating(false);
+        setShowDialog(false);
+        return;
+      }
       const promises = localWords.map(word => {
         const wordDoc = doc(firestore, `users/${user.uid}/words/${word.id}`);
         return setDoc(wordDoc, word);
@@ -116,8 +128,15 @@ export function WordsMigrationHandler() {
     return () => window.removeEventListener('check-migration-dialog', handler);
   }, [user]);
   
-  // Only render the dialog if needed and if not showing Google username dialog
-  if (!showDialog || window?.__showingGoogleUsernameDialog) return null;
+  // Only render the dialog if needed and if registration is complete
+  if (
+    !user || 
+    !showDialog || 
+    window?.__showingGoogleUsernameDialog || 
+    profileLoading || 
+    !profile?.username ||
+    !localStorage.getItem(`registration-completed-${user.uid}`)
+  ) return null;
   
   return (
     <AlertDialog open={showDialog} onOpenChange={setShowDialog}>

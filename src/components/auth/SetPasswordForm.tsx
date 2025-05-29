@@ -1,92 +1,205 @@
-import React, { useState } from "react";
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import zxcvbn from "zxcvbn";
-import axios from "axios";
+import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
+import { usePasswordValidation } from "@/hooks/usePasswordValidation";
+import { validatePassword, validatePasswordMatch, validateForm, setPasswordSchema } from "@/lib/validation";
+import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
+import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 
-export default function SetPasswordForm({ email, onSetPassword, isLoading, error }: {
+interface SetPasswordFormProps {
   email: string;
-  onSetPassword: (password: string) => void;
-  isLoading: boolean;
+  onSubmitAction: (password: string) => Promise<void>;
   error?: string | null;
-}) {
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [passwordStrength, setPasswordStrength] = useState<number>(0);
-  const [breached, setBreached] = useState<boolean | null>(null);
+  loading?: boolean;
+}
 
-  // Check password strength and breach status
-  const handlePasswordChange = async (val: string) => {
-    setPassword(val);
-    const result = zxcvbn(val);
-    setPasswordStrength(result.score);
-    // Breached password check (k-anonymity, partial hash)
-    if (val.length >= 8) {
-      const sha1 = await window.crypto.subtle.digest('SHA-1', new TextEncoder().encode(val));
-      const hash = Array.from(new Uint8Array(sha1)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-      const prefix = hash.slice(0, 5);
-      const suffix = hash.slice(5);
-      try {
-        const res = await axios.get(`https://api.pwnedpasswords.com/range/${prefix}`);
-        setBreached(res.data.includes(suffix));
-      } catch {
-        setBreached(null); // API error
-      }
-    } else {
-      setBreached(null);
+export default function SetPasswordForm({
+  email,
+  onSubmitAction,
+  error,
+  loading = false
+}: SetPasswordFormProps) {
+  const [formState, setFormState] = useState({
+    password: "",
+    confirmPassword: "",
+    showPassword: false,
+    showConfirmPassword: false,
+    confirmError: null as string | null
+  });
+
+  const { strength, checking, validate } = usePasswordValidation();
+
+  // Validate password whenever it changes
+  useEffect(() => {
+    if (formState.password) {
+      validate(formState.password);
     }
+  }, [formState.password, validate]);
+
+  // Clear confirm error when either password changes
+  useEffect(() => {
+    if (formState.confirmError) {
+      setFormState(prev => ({ ...prev, confirmError: null }));
+    }
+  }, [formState.password, formState.confirmPassword]);
+
+  // Helper to update form state
+  const updateFormState = (updates: Partial<typeof formState>) => {
+    setFormState(prev => ({ ...prev, ...updates }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Compute validation state
+  const validationState = useMemo(() => {
+    const result = validateForm(setPasswordSchema, {
+      password: formState.password,
+      confirmPassword: formState.confirmPassword,
+    });
+    if (!result.isValid) {
+      if (result.message === "Passwords do not match.") {
+        return { isValid: false, message: "The passwords you entered do not match. Please re-enter your password to confirm." };
+      }
+      if (result.message && result.message.includes("at least 8 characters")) {
+        return { isValid: false, message: "Your password must be at least 8 characters long." };
+      }
+      return { isValid: false, message: result.message };
+    }
+    if (checking) {
+      return {
+        isValid: false,
+        message: (
+          <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Analyzing password strength...</span>
+        )
+      };
+    }
+    if (strength < 3) {
+      return {
+        isValid: false,
+        message: (
+          <span>
+            Please choose a stronger password. Use a mix of uppercase, lowercase, numbers, and symbols until the strength meter is green.
+          </span>
+        )
+      };
+    }
+    return { isValid: true, message: null };
+  }, [formState, checking, strength]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLocalError(null);
-    if (!password || password.length < 6) {
-      setLocalError("Password must be at least 6 characters.");
-      return;
+    if (!validationState.isValid) return;
+
+    try {
+      await onSubmitAction(formState.password);
+      // Reset form on success
+      setFormState({
+        password: "",
+        confirmPassword: "",
+        showPassword: false,
+        showConfirmPassword: false,
+        confirmError: null
+      });
+    } catch (err) {
+      // Error handling is managed by parent component
     }
-    if (password !== confirm) {
-      setLocalError("Passwords do not match.");
-      return;
-    }
-    onSetPassword(password);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-2">
-      <Label htmlFor="email">Email</Label>
-      <Input id="email" type="email" value={email} disabled />
-      <Label htmlFor="password">New Password</Label>
-      <Input
-        id="password"
-        type="password"
-        placeholder="New password"
-        value={password}
-        onChange={e => handlePasswordChange(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
-      {/* Password strength meter */}
-      <div className="text-xs">
-        Strength: {["Too weak", "Weak", "Fair", "Good", "Strong"][passwordStrength]}
-        {breached === true && <span className="text-red-500 ml-2">Breached password!</span>}
-        {breached === false && <span className="text-green-600 ml-2">Not found in breaches</span>}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          disabled
+          className="bg-muted"
+        />
       </div>
-      <Label htmlFor="confirm">Confirm Password</Label>
-      <Input
-        id="confirm"
-        type="password"
-        placeholder="Confirm password"
-        value={confirm}
-        onChange={e => setConfirm(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
-      {(localError || error) && <div className="text-red-500 text-xs">{localError || error}</div>}
-      <Button type="submit" variant="default" size="sm" disabled={isLoading}>
-        {isLoading ? "Setting..." : "Set Password"}
-      </Button>
+
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            type={formState.showPassword ? "text" : "password"}
+            value={formState.password}
+            onChange={(e) => updateFormState({ password: e.target.value })}
+            placeholder="Create a password"
+            required
+            disabled={loading}
+            className="pr-10"
+            autoComplete="new-password"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
+            onClick={() => updateFormState({ showPassword: !formState.showPassword })}
+            disabled={loading}
+          >
+            {formState.showPassword ? (
+              <EyeOffIcon className="h-4 w-4" />
+            ) : (
+              <EyeIcon className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        <PasswordStrengthMeter strength={strength} password={formState.password} />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirm Password</Label>
+        <div className="relative">
+          <Input
+            id="confirmPassword"
+            type={formState.showConfirmPassword ? "text" : "password"}
+            value={formState.confirmPassword}
+            onChange={(e) => updateFormState({ confirmPassword: e.target.value })}
+            placeholder="Confirm password"
+            required
+            disabled={loading}
+            className="pr-10"
+            autoComplete="new-password"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
+            onClick={() => updateFormState({ showConfirmPassword: !formState.showConfirmPassword })}
+            disabled={loading}
+          >
+            {formState.showConfirmPassword ? (
+              <EyeOffIcon className="h-4 w-4" />
+            ) : (
+              <EyeIcon className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Password strength and validation feedback */}
+      <FormStatusMessage message={validationState.message} type="error" />
+      <FormStatusMessage message={error} type="error" />
+
+      <div className="space-y-2">
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading || !validationState.isValid}
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            "Set Password"
+          )}
+        </Button>
+      </div>
     </form>
   );
 }

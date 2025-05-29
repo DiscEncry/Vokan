@@ -11,133 +11,151 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import EmailAuthForm from "./EmailAuthForm";
 import SetPasswordForm from "./SetPasswordForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { checkUsernameExists } from "@/lib/firebase/checkUsernameExists";
-import { createUserProfile } from "@/lib/firebase/userProfile";
-import type { UserProfile } from "@/types/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import AccountDeletionForm from "./AccountDeletionForm";
 
 export function AuthButton() {
-	const { user, isLoading, signInWithProvider, signOut } = useAuth();
+	const { user, isLoading, signInWithProvider, signOut, error, clearError } = useAuth();
 	const { profile, loading: profileLoading, forceRefresh } = useUserProfile();
-	const [showEmailDialog, setShowEmailDialog] = useState(false);
-	const [showSetPasswordDialog, setShowSetPasswordDialog] = useState(false);
-	const [pendingGoogleUser, setPendingGoogleUser] = useState<{ email: string } | null>(null);
-	const [setPasswordLoading, setSetPasswordLoading] = useState(false);
-	const [setPasswordError, setSetPasswordError] = useState<string | null>(null);
+	const [showAuthDialog, setShowAuthDialog] = useState(false);
+	const [activeTab, setActiveTab] = useState<'email' | 'google'>('email');
+	const [pendingGoogleUser, setPendingGoogleUser] = useState<{ email: string | undefined } | null>(null);
+	const [isRegistering, setIsRegistering] = useState(false);
+	const handleToggleModeAction = () => setIsRegistering(v => !v);
 
-	// Force profile refresh when user changes (e.g., after Google registration/profile update)
-	useEffect(() => {
-		if (user) forceRefresh();
-	}, [user]);
-
-	// Listen for user-profile-updated event to force profile refresh
-	useEffect(() => {
-		const handler = () => forceRefresh();
-		window.addEventListener('user-profile-updated', handler);
-		return () => window.removeEventListener('user-profile-updated', handler);
-	}, []);
-
-	// Handler for Google sign-in with linking logic
-	const handleProviderSignIn = async (provider: "google") => {
-		const result = await signInWithProvider(provider);
-		if (result && typeof result === "object" && "needsPassword" in result && result.needsPassword && result.email) {
-			setPendingGoogleUser({ email: result.email });
-			setShowSetPasswordDialog(true);
-		} else if (result && typeof result === "object" && "uid" in result && result.email && result.uid) {
-			if (window && typeof window !== "undefined") {
-				window.dispatchEvent(
-					new CustomEvent("show-google-username-dialog", { detail: { email: result.email, uid: result.uid } })
-				);
+	const handleProviderSignIn = useCallback(async () => {
+		try {
+			const result = await signInWithProvider("google");
+			if (result && typeof result === "object" && "needsPassword" in result && result.needsPassword) {
+				setPendingGoogleUser({ email: result.email });
+			} else {
+				setShowAuthDialog(false);
+				setIsRegistering(false); // Reset registration state after Google sign-in
 			}
+		} catch (error) {
+			// Error is handled by context
+			console.error("Provider sign-in error:", error);
 		}
-	};
+	}, [signInWithProvider]);
 
-	const handleSignOut = async () => {
-		await signOut();
-	};
+	const handleSignOut = useCallback(async () => {
+		try {
+			await signOut();
+		} catch (error) {
+			console.error("Sign out error:", error);
+		}
+	}, [signOut]);
 
-	const handleSetPassword = async (password: string) => {
+	const handleSetPassword = useCallback(async (password: string) => {
 		if (!pendingGoogleUser?.email) return;
-		setSetPasswordLoading(true);
-		setSetPasswordError(null);
-		const result = await signInWithProvider("google", password);
-		setSetPasswordLoading(false);
-		if (result && typeof result === "object" && "error" in result && result.error) {
-			setSetPasswordError(result.error);
-		} else {
-			setShowSetPasswordDialog(false);
-			setPendingGoogleUser(null);
+		
+		try {
+			const result = await signInWithProvider("google", password);
+			if (result && typeof result === "object" && !("error" in result)) {
+				setShowAuthDialog(false);
+				setPendingGoogleUser(null);
+				forceRefresh();
+			}
+		} catch (error) {
+			console.error("Set password error:", error);
 		}
-	};
+	}, [pendingGoogleUser?.email, signInWithProvider, forceRefresh]);
 
-	if (isLoading || profileLoading) {
-		return (
-			<Button variant="outline" size="sm" disabled>
-				<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-				Loading...
-			</Button>
-		);
-	}
+	const handleAuthDialogClose = useCallback(() => {
+		clearError();
+		setShowAuthDialog(false);
+		setIsRegistering(false); // Always reset registration state when dialog closes
+	}, [clearError]);
 
-	if (!user) {
+	const isAuthenticating = isLoading || profileLoading;
+
+	const menuContent = useMemo(() => {
+		if (isAuthenticating) {
+			return (
+				<Button variant="outline" size="sm" disabled>
+					<Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading...
+				</Button>
+			);
+		}
+
+		if (!user) {
+			return (
+				<>
+					<Button 
+						variant="outline" 
+						size="sm" 
+						onClick={() => { clearError(); setShowAuthDialog(true); }}
+					>
+						<LogIn className="h-4 w-4 mr-2" />Sign In
+					</Button>
+					
+					<Dialog open={showAuthDialog} onOpenChange={handleAuthDialogClose}>
+						<DialogContent className="sm:max-w-[425px]">
+							<DialogHeader>
+								<DialogTitle>{isRegistering ? "Create Account" : "Welcome Back"}</DialogTitle>
+								<DialogDescription>{isRegistering ? "Register a new account" : "Sign in to your account"}</DialogDescription>
+							</DialogHeader>
+							<EmailAuthForm onSuccess={() => setShowAuthDialog(false)} isRegistering={isRegistering} onToggleModeAction={handleToggleModeAction} />
+						</DialogContent>
+					</Dialog>
+
+					{pendingGoogleUser && (
+						<Dialog 
+							open={true} 
+							onOpenChange={(open) => !open && setPendingGoogleUser(null)}
+						>
+							<DialogContent>
+								<DialogHeader>
+									<DialogTitle>Set Password</DialogTitle>
+									<DialogDescription>
+										Please set a password for your account
+									</DialogDescription>
+								</DialogHeader>
+								<SetPasswordForm
+									email={pendingGoogleUser.email ? pendingGoogleUser.email : ""}
+									onSubmitAction={handleSetPassword}
+								/>
+							</DialogContent>
+						</Dialog>
+					)}
+				</>
+			);
+		}
+
 		return (
-			<>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm">
-							<LogIn className="h-4 w-4 mr-2" />
-							Sign In
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Sign in with</DropdownMenuLabel>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onClick={() => handleProviderSignIn("google")}>
-							<LogIn className="h-4 w-4 mr-2 text-blue-500" />Google
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onClick={() => setShowEmailDialog(true)}>
-							<LogIn className="h-4 w-4 mr-2 text-gray-500" />Email / Password
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-				<Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle>Email Sign In / Register</DialogTitle>
-							<DialogDescription>Sign in or create an account with your email address.</DialogDescription>
-						</DialogHeader>
-						<EmailAuthForm onAuthSuccess={() => setShowEmailDialog(false)} />
-					</DialogContent>
-				</Dialog>
-			</>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="outline" size="sm">
+						<User className="h-4 w-4 mr-2" />
+						{profile?.username || user.email}
+					</Button>
+				</DropdownMenuTrigger>
+				
+				<DropdownMenuContent align="end">
+					<DropdownMenuLabel>Account</DropdownMenuLabel>
+					<DropdownMenuItem asChild>
+						<a href="/settings" className="w-full cursor-pointer">Settings</a>
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem onClick={handleSignOut}>
+						<LogOut className="h-4 w-4 mr-2" />
+						Sign Out
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		);
-	}
+	}, [user, profile, isAuthenticating, showAuthDialog, pendingGoogleUser, clearError, handleAuthDialogClose, handleSetPassword, handleSignOut]);
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="outline" size="sm">
-					<User className="h-4 w-4 mr-2" />
-					{profile?.username || user.displayName || 'User'}
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuLabel>Account</DropdownMenuLabel>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem disabled>
-					{user.email}
-				</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem onClick={handleSignOut}>
-					<LogOut className="h-4 w-4 mr-2" />
-					Sign Out
-				</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
+		<>
+			{menuContent}
+			
+
+		</>
 	);
 }

@@ -25,11 +25,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <VocabularyProvider>
           <ClientRoot>
             {children}
-            <footer className="w-full text-center text-xs text-gray-500 py-4 border-t mt-8">
-              <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline mx-2">Privacy Policy</a>
-              |
-              <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer" className="underline mx-2">Terms of Service</a>
-            </footer>
+            {/* Footer removed: compliance links will be shown in auth forms instead */}
           </ClientRoot>
           <Toaster />
         </VocabularyProvider>

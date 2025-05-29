@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserProfile } from "@/lib/firebase/userProfile";
+import type { UserProfile } from "@/types/userProfile";
 
 export function useUserProfile() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Add a forceRefresh state to allow manual refresh

@@ -6,6 +6,7 @@ import { useVocabulary } from "@/context/VocabularyContext";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import GuideDialog from "@/components/lexify/library/GuideDialog";
+import Link from 'next/link';
 
 export function AppHeader() {
   const { isLocalOnly, isSyncing } = useVocabulary();

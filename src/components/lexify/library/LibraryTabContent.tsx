@@ -14,8 +14,6 @@ import { useFilteredSortedWords, SortOption } from './useFilteredSortedWords';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from "@/context/AuthContext";
 import { getUserProfile } from "@/lib/firebase/userProfile";
-import ProfileForm from "@/components/auth/ProfileForm";
-import AccountLinkingForm from "@/components/auth/AccountLinkingForm";
 
 // Dynamic imports with loading fallbacks
 const ImportWordsSection = dynamic(() => import('./ImportWordsSection'), {
@@ -186,20 +184,6 @@ const LibraryTabContent = () => {
           />
         </div>
       </div>
-      {user && (
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-2">Profile</h2>
-          {profileLoading ? (
-            <div>Loading profile...</div>
-          ) : profile ? (
-            <ProfileForm initialProfile={profile} onSuccess={setProfile} />
-          ) : null}
-          <div className="mt-4">
-            <h3 className="text-md font-semibold mb-1">Account Linking</h3>
-            <AccountLinkingForm />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

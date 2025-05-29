@@ -10,6 +10,19 @@ service cloud.firestore {
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    match /userPreferences/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // User preferences - allow users to read and write only their own preferences
+    match /userPreferences/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Validate preference updates
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['dailyReminders', 'soundEffects', 'shareProgress', 'reviewNotifications', 'loginNotifications', 'darkMode'])
+        && (!request.resource.data.keys().hasAny(['darkMode']) || request.resource.data.darkMode in ['light', 'dark', 'system']);
+    }
 
     // Word Details Cache - Accessible by anyone
     // Document ID is the lowercased word

@@ -1,4 +1,10 @@
 "use client";
+declare global {
+  interface Window {
+    __showingGoogleUsernameDialog?: boolean;
+  }
+}
+
 import { ReactNode, useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import GoogleUsernameForm from "@/components/auth/GoogleUsernameForm";
@@ -7,8 +13,9 @@ import { useAuth } from "@/context/AuthContext";
 import { checkUsernameExists } from "@/lib/firebase/checkUsernameExists";
 import { createUserProfile } from "@/lib/firebase/userProfile";
 import { auth } from '@/lib/firebase/firebaseConfig';
-import { EmailAuthProvider, linkWithCredential } from 'firebase/auth';
+import { EmailAuthProvider, linkWithCredential, User } from 'firebase/auth';
 import type { UserProfile } from '@/types/userProfile';
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 function ErrorFallback({ error }: { error: Error }) {
   return (
@@ -20,9 +27,22 @@ function ErrorFallback({ error }: { error: Error }) {
   );
 }
 
+// Utility to delete the current Firebase Auth user (for canceling incomplete Google registration)
+async function deleteCurrentUser() {
+  if (auth?.currentUser) {
+    try {
+      await auth.currentUser.delete();
+    } catch (err: any) {
+      // If requires recent login, fallback to signOut
+      await auth.signOut();
+    }
+  }
+}
+
 export default function ClientRoot({ children }: { children: ReactNode }) {
   // Global Google username dialog state
-  const { user, isLoading, signInWithProvider } = useAuth();
+  const { user, isLoading, signInWithProvider, signOut } = useAuth();
+  const { profile, loading: profileLoading } = useUserProfile();
   const [showGoogleUsernameDialog, setShowGoogleUsernameDialog] = useState(false);
   const [pendingGoogleProfile, setPendingGoogleProfile] = useState<{ email: string; uid: string } | null>(null);
   const [googleUsernameLoading, setGoogleUsernameLoading] = useState(false);
@@ -53,23 +73,35 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
       setGoogleUsernameError(err.message || "Failed to link password to Google account.");
       setGoogleUsernameLoading(false);
       return;
+    }    try {
+      // Create user profile in Firestore
+      const profile: UserProfile = {
+        uid: pendingGoogleProfile.uid,
+        email: pendingGoogleProfile.email,
+        username,
+        createdAt: new Date().toISOString(),
+        provider: 'google',
+      };
+      await createUserProfile(profile);
+      
+      // Mark registration as completed
+      localStorage.setItem(`registration-completed-${pendingGoogleProfile.uid}`, 'true');
+      
+      // Dispatch event to force profile refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('user-profile-updated'));
+      }
+      
+      // Wait briefly for profile to be available
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      setShowGoogleUsernameDialog(false);
+      setPendingGoogleProfile(null);
+      setGoogleUsernameLoading(false);
+    } catch (err: any) {
+      setGoogleUsernameError(err.message || "Failed to create user profile. Please try again.");
+      setGoogleUsernameLoading(false);
     }
-    // Create user profile in Firestore
-    const profile: UserProfile = {
-      uid: pendingGoogleProfile.uid,
-      email: pendingGoogleProfile.email,
-      username,
-      createdAt: new Date().toISOString(),
-      provider: 'google',
-    };
-    await createUserProfile(profile);
-    // Dispatch global event to force profile refresh in UI
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('user-profile-updated'));
-    }
-    setShowGoogleUsernameDialog(false);
-    setPendingGoogleProfile(null);
-    setGoogleUsernameLoading(false);
   };
 
   useEffect(() => {
@@ -98,11 +130,43 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
       window.dispatchEvent(new Event('check-migration-dialog'));
     }
   }, [showGoogleUsernameDialog]);
+  // Only show GoogleUsernameDialog for initial registration
+  useEffect(() => {
+    // Don't show dialog if registration was already completed (check both localStorage and Firestore profile)
+    const registrationCompleted = user && localStorage.getItem(`registration-completed-${user.uid}`);
+    if (registrationCompleted || (user && profile && profile.username)) {
+      setShowGoogleUsernameDialog(false);
+      setPendingGoogleProfile(null);
+      return;
+    }
+
+    // Show dialog for Google users without a username
+    if (
+      user &&
+      user.providerData.some(p => p.providerId === "google.com") &&
+      !profileLoading &&
+      (!profile || !profile.username)
+    ) {
+      setPendingGoogleProfile({ email: user.email || "", uid: user.uid });
+      setShowGoogleUsernameDialog(true);
+    }
+  }, [user, profile, profileLoading]);
+  // Handle dialog close: only delete user if registration wasn't completed
+  const handleDialogOpenChange = async (open: boolean) => {
+    if (!open) {
+      // Only delete the user if they haven't completed registration
+      if (pendingGoogleProfile && (!user || !profile?.username)) {
+        await deleteCurrentUser();
+      }
+      setShowGoogleUsernameDialog(false);
+      setPendingGoogleProfile(null);
+    }
+  };
 
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       {children}
-      <Dialog open={showGoogleUsernameDialog} onOpenChange={setShowGoogleUsernameDialog}>
+      <Dialog open={showGoogleUsernameDialog} onOpenChange={handleDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Complete Google Registration</DialogTitle>
@@ -110,7 +174,7 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
           </DialogHeader>
           <GoogleUsernameForm
             email={pendingGoogleProfile?.email || ''}
-            onSubmit={handleGoogleUsernameSubmit}
+            onSubmitAction={handleGoogleUsernameSubmit}
             isLoading={googleUsernameLoading}
             error={googleUsernameError}
           />
