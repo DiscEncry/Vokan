@@ -8,6 +8,7 @@ declare global {
 import { ReactNode, useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import GoogleUsernameForm from "@/components/auth/GoogleUsernameForm";
+import EmailAuthForm from "@/components/auth/EmailAuthForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { checkUsernameExists } from "@/lib/firebase/checkUsernameExists";
@@ -47,6 +48,7 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
   const [pendingGoogleProfile, setPendingGoogleProfile] = useState<{ email: string; uid: string } | null>(null);
   const [googleUsernameLoading, setGoogleUsernameLoading] = useState(false);
   const [googleUsernameError, setGoogleUsernameError] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Handler for Google username/password form submit
   const handleGoogleUsernameSubmit = async (username: string, password: string, confirm: string) => {
@@ -163,6 +165,30 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
       setPendingGoogleProfile(null);
     }
   };
+
+  // --- AUTH GUARD: Only render app content for authenticated users ---
+  // Allow registration dialog to show if user is not authenticated
+  if (!isLoading && !user && !showGoogleUsernameDialog) {
+    // Show login/register dialog only, block app content
+    return (
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Dialog open={true}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Sign in to continue</DialogTitle>
+              <DialogDescription>
+                You must be signed in to use this app. Please log in or create an account.
+              </DialogDescription>
+            </DialogHeader>
+            <EmailAuthForm
+              isRegistering={isRegistering}
+              onToggleModeAction={() => setIsRegistering((v) => !v)}
+            />
+          </DialogContent>
+        </Dialog>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>

@@ -5,13 +5,11 @@ import { AppHeader } from "@/components/lexify/AppHeader";
 import LibraryTabContent from "@/components/lexify/library/LibraryTabContent"; // Changed to default import
 import GamesTabContent from "@/components/lexify/games/GamesTabContent"; // Changed to default import
 import InsightsTabContent from "@/components/lexify/insights/InsightsTabContent"; // Changed to default import
-import { WordsMigrationHandler } from "@/components/auth/WordsMigrationHandler";
 
 export default function Home() {
   return (
     <div className="flex flex-col h-screen">
       <AppHeader />
-      <WordsMigrationHandler />
       <main className="flex-1 p-4 container mx-auto max-w-5xl">
         <Tabs defaultValue="library" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8">

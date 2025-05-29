@@ -9,7 +9,7 @@ import GuideDialog from "@/components/lexify/library/GuideDialog";
 import Link from 'next/link';
 
 export function AppHeader() {
-  const { isLocalOnly, isSyncing } = useVocabulary();
+  const { isSyncing } = useVocabulary();
   const { user } = useAuth();
 
   return (
@@ -25,11 +25,7 @@ export function AppHeader() {
             <span>Syncing...</span>
           </div>
         )}
-        {isLocalOnly && user === null && (
-          <span className="text-xs bg-yellow-200 dark:bg-yellow-900 px-2 py-0.5 rounded-full ml-2 text-yellow-900 dark:text-yellow-200" aria-label="Local Only mode">
-            Local Only
-          </span>
-        )}
+        {/* Remove Local Only badge, only show Cloud Sync for authenticated users */}
         {user && (
           <span className="text-xs bg-green-200 dark:bg-green-900 px-2 py-0.5 rounded-full ml-2 text-green-900 dark:text-green-200" aria-label="Cloud Sync enabled">
             Cloud Sync

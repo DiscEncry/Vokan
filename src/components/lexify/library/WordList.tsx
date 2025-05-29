@@ -46,7 +46,7 @@ const VISIBLE_COUNT = 9; // Number of rows visible at once (for 500px container)
 const PAGE_SIZE = 50;
 
 const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
-  const { deleteWord, isLocalOnly } = useVocabulary();
+  const { deleteWord } = useVocabulary();
   const { toast } = useToast();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [wordToDelete, setWordToDelete] = useState<{ id: string; text: string } | null>(null);
@@ -78,11 +78,6 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
   const handleDeleteAll = useCallback(async () => {
     setIsDeletingAll(true);
     try {
-      if (isLocalOnly) {
-        localStorage.removeItem('lexify-vocabulary');
-        showStandardToast(toast, 'success', 'All Words Deleted', 'All words have been removed from your library.');
-        window.location.reload();
-      } else {
         // Cloud: delete all words in parallel for performance
         const results = await Promise.allSettled(words.map(word => deleteWord(word.id)));
         const failed = results.filter(r => r.status === 'rejected').length;
@@ -94,14 +89,13 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
             ? 'All words have been removed from your library.'
             : `Some words could not be deleted (${failed} failed). Please refresh and try again if needed.`
         );
-      }
     } catch (e) {
       showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
     } finally {
       setIsDeletingAll(false);
       setIsDeleteAllOpen(false);
     }
-  }, [isLocalOnly, words, deleteWord, toast]);
+  }, [words, deleteWord, toast]);
 
   if (isLoading) {
     return <LoadingSkeleton />;
