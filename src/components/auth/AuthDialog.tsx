@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 
 export default function AuthDialog() {
   const { open, closeDialog, isRegistering, setRegistering } = useAuthDialog();
-  const { signInWithProvider, isLoading, clearError } = useAuth();
+  const { signInWithProvider, isLoading: authLoading, clearError } = useAuth();
   const { profile, loading: profileLoading, forceRefresh } = useUserProfile();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -62,6 +62,11 @@ export default function AuthDialog() {
     setPendingGoogleUser(null);
     closeDialog();
   };
+
+  // Hide dialog completely if user is authenticated or still loading
+  if ((authLoading || profileLoading) && !open && !showWelcome) {
+    return null;
+  }
 
   return (
     <>

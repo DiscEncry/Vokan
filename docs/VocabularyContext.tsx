@@ -50,11 +50,44 @@ interface VocabularyContextType {
   getDecoyWords: (targetWordId: string, count: number) => Word[];
   isLoading: boolean;
   isSyncing: boolean;
+  isLocalOnly: boolean;
 }
 
 const VocabularyContext = createContext<VocabularyContextType | undefined>(undefined);
 
-// Remove all localStorage logic and local-only state
+const initialWords: Word[] = [];
+
+const loadFromStorage = (): Word[] => {
+  try {
+    const storedData = localStorage.getItem(STORAGE_KEY);
+    if (storedData) {
+      const parsedData = JSON.parse(storedData);
+      if (Array.isArray(parsedData) && parsedData.every(item =>
+        typeof item === 'object' && 'id' in item && 'text' in item && 'dateAdded' in item && 'fsrsCard' in item
+      )) {
+        return parsedData;
+      }
+    }
+    console.warn("[VocabularyContext] Invalid data structure in localStorage, using initial words.");
+    return initialWords;
+  } catch (error) {
+    console.error("[VocabularyContext] Failed to load words from localStorage:", error);
+    return initialWords;
+  }
+};
+
+const saveToStorage = (data: Word[]): boolean => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
+  } catch (error) {
+    console.error("[VocabularyContext] Failed to save words to localStorage:", error);
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn("[VocabularyContext] LocalStorage quota exceeded. Cannot save words locally.");
+    }
+    return false;
+  }
+};
 
 export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
@@ -62,7 +95,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  // const isLocalOnly = !user; // REMOVE: Only allow users with account
+  const isLocalOnly = !user;
 
   // Abuse prevention: simple in-memory rate limit for addWord
   const addWordTimestamps = useRef<number[]>([]);
@@ -238,27 +271,6 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     return generateDecoyWords(words, targetWordId, count);
   }, [words]);
 
-  // Listen to Firestore for real-time updates to the user's words
-  useEffect(() => {
-    if (!user || !firestore) {
-      setWords([]);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    const q = query(collection(firestore, `users/${user.uid}/words`), orderBy('dateAdded', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const wordsData: Word[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Word));
-      setWords(wordsData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error('[VocabularyContext] Firestore onSnapshot error:', error);
-      setIsLoading(false);
-      showStandardToast(toast, 'error', 'Error', 'Failed to load words from server.');
-    });
-    return () => unsubscribe();
-  }, [user, firestore, toast]);
-
   const contextValue = {
     words,
     addWord,
@@ -269,8 +281,24 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     getDecoyWords,
     isLoading,
     isSyncing,
-    isLocalOnly: false, // Always false, local-only mode is not supported
+    isLocalOnly,
   };
+
+  // Load words from localStorage on mount (if not using Firestore)
+  useEffect(() => {
+    if (!user) {
+      const loaded = loadFromStorage();
+      setWords(loaded);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  // Save words to localStorage whenever they change (if not using Firestore)
+  useEffect(() => {
+    if (!user) {
+      saveToStorage(words);
+    }
+  }, [words, user]);
 
   return (
     <VocabularyContext.Provider value={contextValue}>

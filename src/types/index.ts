@@ -10,7 +10,7 @@ export interface FSRSCard {
   reps: number;
   lapses: number;
   state: 'New' | 'Learning' | 'Review' | 'Relearning';
-  last_review?: string; // ISO string
+  last_review?: string | null; // Allow null for Firestore compatibility
   reviewChange?: 'up' | 'down' | 'none'; // Direction of last review state change
   // v6: Add new fields if required by ts-fsrs v6 (e.g., new lapse/recall/forget fields)
   // If you use custom parameters, add them here as needed
