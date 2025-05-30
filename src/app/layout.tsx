@@ -10,6 +10,8 @@ import { GlobalErrorBoundary } from '@/components/ui/GlobalErrorBoundary';
 import { GoogleAnalytics } from '@/components/ui/GoogleAnalytics';
 import AppShell from '@/components/ui/AppShell';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { AuthDialogProvider } from "@/context/AuthDialogContext";
+import AuthDialog from "@/components/auth/AuthDialog";
 
 // Use Inter as the default sans-serif font
 const fontSans = FontSans({ 
@@ -34,9 +36,14 @@ export default function RootLayout({
         fontSans.variable
       )}>
         <TooltipProvider>
-          <AppShell>
-            {children}
-          </AppShell>
+          <AuthDialogProvider>
+            <AuthProvider>
+              <AuthDialog />
+              <AppShell>
+                {children}
+              </AppShell>
+            </AuthProvider>
+          </AuthDialogProvider>
         </TooltipProvider>
       </body>
     </html>

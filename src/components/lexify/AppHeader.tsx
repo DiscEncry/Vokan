@@ -7,10 +7,13 @@ import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import GuideDialog from "@/components/lexify/library/GuideDialog";
 import Link from 'next/link';
+import { useAuthDialog } from "@/context/AuthDialogContext";
+import { Button } from "@/components/ui/button";
 
 export function AppHeader() {
   const { isSyncing } = useVocabulary();
   const { user } = useAuth();
+  const { openDialog } = useAuthDialog();
 
   return (
     <header
@@ -25,7 +28,6 @@ export function AppHeader() {
             <span>Syncing...</span>
           </div>
         )}
-        {/* Remove Local Only badge, only show Cloud Sync for authenticated users */}
         {user && (
           <span className="text-xs bg-green-200 dark:bg-green-900 px-2 py-0.5 rounded-full ml-2 text-green-900 dark:text-green-200" aria-label="Cloud Sync enabled">
             Cloud Sync
@@ -34,7 +36,8 @@ export function AppHeader() {
       </div>
       <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
         <GuideDialog />
-        <AuthButton />
+        <Button onClick={() => openDialog(false)} variant="outline" size="sm">Sign In</Button>
+        <Button onClick={() => openDialog(true)} variant="outline" size="sm">Register</Button>
         <ModeToggle />
       </div>
     </header>
