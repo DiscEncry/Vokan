@@ -5,7 +5,7 @@ declare global {
   }
 }
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useCallback } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import GoogleUsernameForm from "@/components/auth/GoogleUsernameForm";
 import EmailAuthForm from "@/components/auth/EmailAuthForm";
@@ -41,14 +41,25 @@ async function deleteCurrentUser() {
 }
 
 export default function ClientRoot({ children }: { children: ReactNode }) {
-  // Global Google username dialog state
-  const { user, isLoading, signInWithProvider, signOut } = useAuth();
+  // All hooks at the top level
+  const { user, isLoading, signInWithProvider, signOut, error, clearError } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
   const [showGoogleUsernameDialog, setShowGoogleUsernameDialog] = useState(false);
   const [pendingGoogleProfile, setPendingGoogleProfile] = useState<{ email: string; uid: string } | null>(null);
   const [googleUsernameLoading, setGoogleUsernameLoading] = useState(false);
   const [googleUsernameError, setGoogleUsernameError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  // Google sign-in dialog state for EmailAuthForm
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const handleGoogleSignInAttempt = useCallback(async () => {
+    setIsGoogleLoading(true);
+    clearError();
+    try {
+      await signInWithProvider("google");
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }, [signInWithProvider, clearError]);
 
   // Handler for Google username/password form submit
   const handleGoogleUsernameSubmit = async (username: string, password: string, confirm: string) => {
@@ -136,7 +147,7 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Don't show dialog if registration was already completed (check both localStorage and Firestore profile)
     const registrationCompleted = user && localStorage.getItem(`registration-completed-${user.uid}`);
-    if (registrationCompleted || (user && profile && profile.username)) {
+    if (registrationCompleted || (user && profile && !!profile.username)) {
       setShowGoogleUsernameDialog(false);
       setPendingGoogleProfile(null);
       return;
@@ -166,10 +177,22 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
     }
   };
 
-  // --- AUTH GUARD: Only render app content for authenticated users ---
-  // Allow registration dialog to show if user is not authenticated
-  if (!isLoading && !user && !showGoogleUsernameDialog) {
-    // Show login/register dialog only, block app content
+  // --- AUTH GUARD: Only render app content for fully registered users ---
+  // Block app content if user is not authenticated, profile is loading, or registration is incomplete
+  const registrationIncomplete = user && (!profile || !profile.username);
+
+  if (isLoading || profileLoading) {
+    // Show a loading spinner while auth or profile is loading
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    // Show login/register dialog if not authenticated
     return (
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <Dialog open={true}>
@@ -183,6 +206,8 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
             <EmailAuthForm
               isRegistering={isRegistering}
               onToggleModeAction={() => setIsRegistering((v) => !v)}
+              onGoogleSignIn={handleGoogleSignInAttempt}
+              googleLoading={isGoogleLoading}
             />
           </DialogContent>
         </Dialog>
@@ -190,23 +215,32 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
     );
   }
 
+  if (registrationIncomplete) {
+    // Show Google registration dialog if authenticated but registration incomplete
+    return (
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Dialog open={true}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Complete Google Registration</DialogTitle>
+              <DialogDescription>Choose a username and password to finish creating your account.</DialogDescription>
+            </DialogHeader>
+            <GoogleUsernameForm
+              email={pendingGoogleProfile?.email || user.email || ''}
+              onSubmitAction={handleGoogleUsernameSubmit}
+              isLoading={googleUsernameLoading}
+              error={googleUsernameError}
+            />
+          </DialogContent>
+        </Dialog>
+      </ErrorBoundary>
+    );
+  }
+
+  // Only render app content if user is authenticated and registration is complete
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       {children}
-      <Dialog open={showGoogleUsernameDialog} onOpenChange={handleDialogOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Complete Google Registration</DialogTitle>
-            <DialogDescription>Choose a username and password to finish creating your account.</DialogDescription>
-          </DialogHeader>
-          <GoogleUsernameForm
-            email={pendingGoogleProfile?.email || ''}
-            onSubmitAction={handleGoogleUsernameSubmit}
-            isLoading={googleUsernameLoading}
-            error={googleUsernameError}
-          />
-        </DialogContent>
-      </Dialog>
     </ErrorBoundary>
   );
 }

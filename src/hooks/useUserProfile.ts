@@ -19,7 +19,14 @@ export function useUserProfile() {
     }
     setLoading(true);
     getUserProfile(user.uid)
-      .then((p) => setProfile(p))
+      .then((p) => {
+        // Defensive: only set profile if username is a non-empty string
+        if (p && typeof p.username === 'string' && p.username.trim().length > 0) {
+          setProfile(p);
+        } else {
+          setProfile(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, [user, refreshKey]);
 

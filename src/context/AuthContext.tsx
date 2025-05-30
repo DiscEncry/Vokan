@@ -19,6 +19,35 @@ import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
 import { checkAndUpdateRateLimit } from "@/ai/flows/rateLimitFirestore";
 
+// In-memory brute-force protection (per session, per email)
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_TIME_MS = 5 * 60 * 1000; // 5 minutes
+const failedAttempts: Record<string, { count: number; lastFailed: number; lockedUntil?: number }> = {};
+
+function isLockedOut(email: string) {
+  const entry = failedAttempts[email];
+  if (!entry) return false;
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
+  return false;
+}
+
+function recordFailedAttempt(email: string) {
+  const now = Date.now();
+  if (!failedAttempts[email]) {
+    failedAttempts[email] = { count: 1, lastFailed: now };
+  } else {
+    failedAttempts[email].count += 1;
+    failedAttempts[email].lastFailed = now;
+    if (failedAttempts[email].count >= MAX_FAILED_ATTEMPTS) {
+      failedAttempts[email].lockedUntil = now + LOCKOUT_TIME_MS;
+    }
+  }
+}
+
+function resetFailedAttempts(email: string) {
+  delete failedAttempts[email];
+}
+
 // Auth state and action types
 interface AuthState {
   user: User | null;
@@ -183,6 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string
   ): Promise<User | null> => {
+    if (isLockedOut(email)) {
+      dispatch({ type: 'SET_ERROR', error: `Too many failed attempts. Try again in 5 minutes.` });
+      return null;
+    }
     // Server-side rate limit check
     const rateLimitKey = `signin_${email.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
     try {
@@ -203,10 +236,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return withRequestDeduplication(`signIn_email_${email}`, async () => {
       try {      if (!auth) throw new Error('Internal error: Auth not initialized.');
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      resetFailedAttempts(email);
         dispatch({ type: 'SET_USER', user: userCredential.user });
         dispatch({ type: 'SET_ERROR', error: null });
         return userCredential.user;
       } catch (error: any) {
+        recordFailedAttempt(email);
         const mappedError = mapAuthError(error);
         dispatch({ type: 'SET_ERROR', error: mappedError });
         return null;

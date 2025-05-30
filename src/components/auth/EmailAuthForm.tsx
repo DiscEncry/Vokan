@@ -16,12 +16,15 @@ interface EmailAuthFormProps {
   onSuccess?: () => void;
   isRegistering: boolean;
   onToggleModeAction: () => void;
+  onGoogleSignIn?: () => Promise<void>; // Ensure async signature
+  googleLoading?: boolean;
 }
 
-export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAction }: EmailAuthFormProps) {
+export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAction, onGoogleSignIn, googleLoading }: EmailAuthFormProps) {
   const { signInWithEmail, registerWithEmail, signInWithProvider, error: authError, clearError, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // Restore local googleLoading state for fallback
+  const [internalGoogleLoading, setInternalGoogleLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     email: "",
@@ -120,17 +123,26 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
     setFormData({ email: "", password: "", username: "", confirm: "" });
   };
 
-  // Google sign in handler
+  // Google sign in handler (fallback if onGoogleSignIn not provided)
   const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
+    setInternalGoogleLoading(true);
     clearError();
     try {
       await signInWithProvider("google");
-      onSuccess?.();
+      // Do NOT call onSuccess here, let the parent/dialog handle closing only on full registration
     } catch (e) {
       // error handled by context
     } finally {
-      setGoogleLoading(false);
+      setInternalGoogleLoading(false);
+    }
+  };
+
+  // Debug: Log when Google sign-in handler from parent is called
+  const debugGoogleClick = () => {
+    if (onGoogleSignIn) {
+      console.debug('[EmailAuthForm] Google button clicked, using onGoogleSignIn from parent');
+    } else {
+      console.debug('[EmailAuthForm] Google button clicked, using internal handler');
     }
   };
 
@@ -238,10 +250,11 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
         type="button"
         variant="outline"
         className="w-full flex items-center justify-center gap-2"
-        onClick={handleGoogleSignIn}
-        disabled={isLoading || googleLoading}
+        onClick={async e => { debugGoogleClick(); await (onGoogleSignIn || handleGoogleSignIn)(); }}
+        disabled={isLoading || (typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading)}
+        aria-busy={typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading}
       >
-        {googleLoading ? (
+        {(typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading) ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <>
