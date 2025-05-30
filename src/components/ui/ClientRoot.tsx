@@ -22,10 +22,10 @@ export default function ClientRoot({ children }: { children: ReactNode }) {
   const { openDialog } = useAuthDialog();
 
   useEffect(() => {
-    if (!user) {
+    if (!isLoading && !user) {
       openDialog(false);
     }
-  }, [user, openDialog]);
+  }, [user, isLoading, openDialog]);
 
   if (isLoading || profileLoading) {
     return (

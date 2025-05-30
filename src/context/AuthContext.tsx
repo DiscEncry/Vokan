@@ -18,6 +18,12 @@ import { createUserProfile } from '@/lib/firebase/userProfile';
 import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
 import { checkAndUpdateRateLimit } from "@/ai/flows/rateLimitFirestore";
+import { getUserProfile } from '@/lib/firebase/userProfile';
+
+function generateRandomUsername() {
+  const random = Math.random().toString(36).substring(2, 8);
+  return `user-${random}`;
+}
 
 // In-memory brute-force protection (per session, per email)
 const MAX_FAILED_ATTEMPTS = 5;
@@ -67,7 +73,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   error: string | null;
-  signInWithProvider: (provider: 'google', passwordToLink?: string) => Promise<User | null | { needsPassword?: boolean; email?: string; error?: string; uid?: string }>;
+  signInWithProvider: (provider: 'google', passwordToLink?: string) => Promise<User | null | { isNewUser?: boolean; showWelcome?: boolean; email?: string; error?: string; uid?: string }>;
   signInWithEmail: (email: string, password: string) => Promise<User | null>;
   registerWithEmail: (email: string, password: string, username?: string) => Promise<User | null | { error: string }>;
   clearError: () => void;
@@ -162,34 +168,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = async (
     providerType: 'google',
     passwordToLink?: string
-  ): Promise<User | null | { needsPassword?: boolean; email?: string; error?: string; uid?: string }> => {
+  ): Promise<User | null | { isNewUser?: boolean; showWelcome?: boolean; email?: string; error?: string; uid?: string }> => {
     return withRequestDeduplication(`signIn_${providerType}`, async () => {
       if (!auth) return { error: 'Internal error: Auth not initialized.' };
-
       try {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
         const email = result.user.email!;
-        
-        // Batch request for sign-in methods and credential linking
-        const [methods] = await Promise.all([
-          fetchSignInMethodsForEmail(auth, email),
-          ...(passwordToLink ? [linkWithCredential(result.user, EmailAuthProvider.credential(email, passwordToLink))] : [])
-        ]);
-
-        if (!methods.includes('password') && !passwordToLink) {
-          if (result.user.metadata.creationTime === result.user.metadata.lastSignInTime) {
-            return { uid: result.user.uid, email: result.user.email ?? undefined };
-          }
-          return { needsPassword: true, email };
+        const uid = result.user.uid;
+        // Check if user profile exists
+        let profile = await getUserProfile(uid);
+        let isNewUser = false;
+        if (!profile) {
+          // New user: create random username and profile
+          isNewUser = true;
+          const username = generateRandomUsername();
+          profile = {
+            uid,
+            email,
+            username,
+            createdAt: new Date().toISOString(),
+            provider: 'google',
+          };
+          await createUserProfile(profile);
         }
-
+        // Optionally link password if provided
+        if (passwordToLink) {
+          await linkWithCredential(result.user, EmailAuthProvider.credential(email, passwordToLink));
+        }
+        // Always return showWelcome for new users
+        if (isNewUser) {
+          return { isNewUser: true, showWelcome: true, email, uid };
+        }
         return result.user;
       } catch (error: any) {
         if (error.code === 'auth/account-exists-with-different-credential') {
           const email = error.customData?.email || error.email;
           const methods = await fetchSignInMethodsForEmail(auth, email);
-          
           if (methods.includes('password')) {
             return {
               error: 'This email is registered with a password. Please sign in with your password, then link Google in your account settings.'
@@ -197,7 +212,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return { error: 'This email is registered with another provider.' };
         }
-        
         const mappedError = mapAuthError(error);
         dispatch({ type: 'SET_ERROR', error: mappedError });
         return { error: mappedError };
