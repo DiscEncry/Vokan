@@ -160,6 +160,7 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
           required
           autoComplete={isRegistering ? "email" : "username"}
           disabled={isLoading}
+          aria-required="true"
         />
       </div>
       {isRegistering && (
@@ -178,6 +179,7 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
             minLength={3}
             maxLength={20}
             pattern="[a-zA-Z][a-zA-Z0-9_]{2,19}"
+            aria-required="true"
           />
         </div>
       )}
@@ -195,6 +197,7 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
             autoComplete={isRegistering ? "new-password" : "current-password"}
             className="pr-10"
             disabled={isLoading}
+            aria-required="true"
           />
           <Button
             type="button"
@@ -203,6 +206,7 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
             className="absolute right-2 top-1/2 -translate-y-1/2"
             onClick={() => setShowPassword((v) => !v)}
             disabled={isLoading}
+            aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
           </Button>
@@ -224,17 +228,20 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
             required
             autoComplete="new-password"
             disabled={isLoading}
+            aria-required="true"
           />
         </div>
       )}
       {/* Validation and error messages */}
-      <FormStatusMessage message={validationState.message} type="error" />
-      <FormStatusMessage message={authError} type="error" />
-
+      <div aria-live="polite" aria-atomic="true">
+        <FormStatusMessage message={validationState.message} type="error" />
+        <FormStatusMessage message={authError} type="error" />
+      </div>
       <Button
         type="submit"
         className="w-full"
         disabled={isLoading || !validationState.isValid}
+        aria-busy={isLoading}
       >
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -253,12 +260,13 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
         onClick={async e => { debugGoogleClick(); await (onGoogleSignIn || handleGoogleSignIn)(); }}
         disabled={isLoading || (typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading)}
         aria-busy={typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading}
+        aria-label="Continue with Google"
       >
         {(typeof googleLoading === 'boolean' ? googleLoading : internalGoogleLoading) ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <>
-            <svg width="20" height="20" viewBox="0 0 48 48" className="inline-block mr-2"><g><path fill="#4285F4" d="M43.6 20.5h-1.9V20H24v8h11.3c-1.6 4.3-5.7 7-11.3 7-6.6 0-12-5.4-12-12s5.4-12 12-12c2.7 0 5.2.9 7.2 2.4l6-6C34.5 5.1 29.6 3 24 3 12.9 3 4 11.9 4 23s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.3-4z"/><path fill="#34A853" d="M6.3 14.7l6.6 4.8C14.3 16.1 18.7 13 24 13c2.7 0 5.2.9 7.2 2.4l6-6C34.5 5.1 29.6 3 24 3c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#FBBC05" d="M24 43c5.4 0 10-1.8 13.3-4.9l-6.2-5.1c-2 1.4-4.5 2.2-7.1 2.2-5.6 0-10.3-3.8-12-9l-6.6 5.1C9.7 39.6 16.3 43 24 43z"/><path fill="#EA4335" d="M43.6 20.5h-1.9V20H24v8h11.3c-0.7 2-2.1 3.7-4.1 4.9l6.2 5.1C39.9 39.2 44 33.7 44 27c0-1.3-.1-2.7-.3-4z"/></g></svg>
+            <svg width="20" height="20" viewBox="0 0 48 48" className="inline-block mr-2" aria-hidden="true"><g><path fill="#4285F4" d="M43.6 20.5h-1.9V20H24v8h11.3c-1.6 4.3-5.7 7-11.3 7-6.6 0-12-5.4-12-12s5.4-12 12-12c2.7 0 5.2.9 7.2 2.4l6-6C34.5 5.1 29.6 3 24 3 12.9 3 4 11.9 4 23s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.3-4z"/><path fill="#34A853" d="M6.3 14.7l6.6 4.8C14.3 16.1 18.7 13 24 13c2.7 0 5.2.9 7.2 2.4l6-6C34.5 5.1 29.6 3 24 3c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#FBBC05" d="M24 43c5.4 0 10-1.8 13.3-4.9l-6.2-5.1c-2 1.4-4.5 2.2-7.1 2.2-5.6 0-10.3-3.8-12-9l-6.6 5.1C9.7 39.6 16.3 43 24 43z"/><path fill="#EA4335" d="M43.6 20.5h-1.9V20H24v8h11.3c-0.7 2-2.1 3.7-4.1 4.9l6.2 5.1C39.9 39.2 44 33.7 44 27c0-1.3-.1-2.7-.3-4z"/></g></svg>
             Continue with Google
           </>
         )}
@@ -271,6 +279,7 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
           disabled={isLoading}
           className="text-sm text-gray-400 hover:text-gray-600 hover:underline transition-colors font-medium bg-transparent border-none p-0 m-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "none" }}
+          aria-label={isRegistering ? "Sign In" : "Create Account"}
         >
           {isRegistering
             ? "Already have an account? Sign in"

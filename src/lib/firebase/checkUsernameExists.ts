@@ -1,10 +1,12 @@
 // Utility to check if a username already exists in Firestore
 import { firestore } from './firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 export async function checkUsernameExists(username: string): Promise<boolean> {
   if (!firestore) throw new Error('Firestore not initialized');
-  const q = query(collection(firestore, 'users'), where('username', '==', username));
-  const snap = await getDocs(q);
-  return !snap.empty;
+  if (!username) return false;
+  const normalizedUsername = username.toLowerCase();
+  const usernameDocRef = doc(firestore, 'usernames', normalizedUsername);
+  const docSnap = await getDoc(usernameDocRef);
+  return docSnap.exists();
 }

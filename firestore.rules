@@ -1,34 +1,57 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write only their own data
+    // User profiles: Only the user can read/write their own profile. Enforce validation.
     match /users/{userId} {
-      allow get: if true; // Allow anyone to get a single user profile (for username check)
-      allow list: if true; // Allow anyone to query the users collection (for username uniqueness)
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.username is string
+        && request.resource.data.username.matches(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.provider in ['google', 'password'];
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['username', 'email', 'uid', 'createdAt', 'provider'])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.provider == resource.data.provider
+        && request.resource.data.username is string
+        && request.resource.data.username.matches(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/);
     }
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Username uniqueness: atomic check and lock
+    match /usernames/{usernameDocId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && usernameDocId == request.resource.data.username.lower();
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
+    // User preferences: strict validation
     match /userPreferences/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // User preferences - allow users to read and write only their own preferences
-    match /userPreferences/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Validate preference updates
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['dailyReminders', 'soundEffects', 'shareProgress', 'reviewNotifications', 'loginNotifications', 'darkMode'])
+        && request.resource.data.dailyReminders is bool
+        && request.resource.data.soundEffects is bool
+        && request.resource.data.shareProgress is bool
+        && request.resource.data.reviewNotifications is bool
+        && request.resource.data.loginNotifications is bool
+        && request.resource.data.darkMode in ['light', 'dark', 'system'];
       allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['dailyReminders', 'soundEffects', 'shareProgress', 'reviewNotifications', 'loginNotifications', 'darkMode'])
-        && (!request.resource.data.keys().hasAny(['darkMode']) || request.resource.data.darkMode in ['light', 'dark', 'system']);
+        && (request.resource.data.containsKey('dailyReminders') ? request.resource.data.dailyReminders is bool : true)
+        && (request.resource.data.containsKey('soundEffects') ? request.resource.data.soundEffects is bool : true)
+        && (request.resource.data.containsKey('shareProgress') ? request.resource.data.shareProgress is bool : true)
+        && (request.resource.data.containsKey('reviewNotifications') ? request.resource.data.reviewNotifications is bool : true)
+        && (request.resource.data.containsKey('loginNotifications') ? request.resource.data.loginNotifications is bool : true)
+        && (request.resource.data.containsKey('darkMode') ? request.resource.data.darkMode in ['light', 'dark', 'system'] : true);
     }
-
-    // Word Details Cache - Accessible by anyone
-    // Document ID is the lowercased word
+    // Word Details Cache: restrict write, validate data (example: only allow authenticated users)
     match /wordDetailsCache/{wordText} {
-      allow read: if true; // Anyone can read from the cache
-      allow write: if true; // Anyone (via the AI flow) can write to the cache
+      allow read: if true;
+      allow write: if request.auth != null && request.resource.data.word is string && request.resource.data.details is map;
     }
     
     // Deny all other access to unspecified paths by default

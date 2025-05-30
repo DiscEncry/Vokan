@@ -1,6 +1,29 @@
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getApp } from "firebase/app";
 
+// Log rate limit events for monitoring
+async function logRateLimitEvent({
+  key,
+  allowed,
+  retryAfter,
+  ip,
+}: {
+  key: string;
+  allowed: boolean;
+  retryAfter?: number;
+  ip?: string;
+}) {
+  const db = getFirestore(getApp());
+  const ref = doc(db, "rateLimitLogs", `${key}_${Date.now()}`);
+  await setDoc(ref, {
+    key,
+    allowed,
+    retryAfter: retryAfter || null,
+    ip: ip || null,
+    timestamp: serverTimestamp(),
+  });
+}
+
 // Firestore-based rate limiter
 // key: unique identifier (userId, IP, etc)
 // limit: max allowed requests
@@ -9,10 +32,12 @@ export async function checkAndUpdateRateLimit({
   key,
   limit,
   windowMs,
+  ip,
 }: {
   key: string;
   limit: number;
   windowMs: number;
+  ip?: string;
 }): Promise<{ allowed: boolean; retryAfter?: number }> {
   const db = getFirestore(getApp());
   const ref = doc(db, "rateLimits", key);
@@ -31,13 +56,16 @@ export async function checkAndUpdateRateLimit({
     reset = now + windowMs;
   }
 
+  let allowed = true;
+  let retryAfter: number | undefined = undefined;
   if (count >= limit) {
-    return { allowed: false, retryAfter: reset - now };
+    allowed = false;
+    retryAfter = reset - now;
   }
 
   if (docSnap.exists()) {
     await updateDoc(ref, {
-      count: count + 1,
+      count: allowed ? count + 1 : count,
       reset,
       last: serverTimestamp(),
     });
@@ -49,5 +77,8 @@ export async function checkAndUpdateRateLimit({
     });
   }
 
-  return { allowed: true };
+  // Log the event for monitoring
+  await logRateLimitEvent({ key, allowed, retryAfter, ip });
+
+  return allowed ? { allowed: true } : { allowed: false, retryAfter };
 }

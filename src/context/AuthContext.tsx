@@ -14,7 +14,7 @@ import {
   linkWithCredential,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
-import { createUserProfile } from '@/lib/firebase/userProfile';
+import { createUserProfile, registerUserWithUsername } from '@/lib/firebase/userProfile';
 import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
 import { checkAndUpdateRateLimit } from "@/ai/flows/rateLimitFirestore";
@@ -232,11 +232,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // Server-side rate limit check
     const rateLimitKey = `signin_${email.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+    // Placeholder: get user IP (should be set server-side or via trusted header)
+    let userIp: string | undefined = undefined;
+    // Example: if using Next.js API route, get from req.headers['x-forwarded-for']
     try {
       const rateLimit = await checkAndUpdateRateLimit({
         key: rateLimitKey,
         limit: RATE_LIMIT_ATTEMPTS,
         windowMs: RATE_LIMIT_WINDOW_MS,
+        ip: userIp,
       });
       if (!rateLimit.allowed) {
         const retrySec = Math.ceil((rateLimit.retryAfter || 0) / 1000);
@@ -271,28 +275,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return withRequestDeduplication(`register_${email}`, async () => {
       if (!auth) return { error: 'Internal error: Auth not initialized.' };
       if (!username) return { error: 'Username is required.' };
-
       try {
-        const exists = await checkUsernameExists(username);
-        if (exists) return { error: 'Username is already taken.' };
-
+        // Create Firebase Auth user first
         const result = await createUserWithEmailAndPassword(auth, email, password);
-        const profile: UserProfile = {
-          uid: result.user.uid,
-          email: result.user.email!,
-          username,
-          createdAt: new Date().toISOString(),
-          provider: 'password',
-        };
-        
-        await createUserProfile(profile);
+        // Call secure API route for atomic registration and rate limiting
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password, // Optionally send for server-side validation, or omit if not needed
+            username,
+            uid: result.user.uid,
+            provider: 'password',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          // Optionally: delete the Firebase user if registration fails
+          if (result.user) await result.user.delete();
+          return { error: data.error || 'Registration failed.' };
+        }
         return result.user;
       } catch (error: any) {
         const mappedError = mapAuthError(error);
         dispatch({ type: 'SET_ERROR', error: mappedError });
         return { error: mappedError };
       }
-    });
+    }) as Promise<User | null | { error: string }>;
   };
 
   const clearError = () => dispatch({ type: 'SET_ERROR', error: null });
