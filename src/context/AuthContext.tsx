@@ -12,46 +12,16 @@ import {
   fetchSignInMethodsForEmail,
   EmailAuthProvider,
   linkWithCredential,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
-import { createUserProfile, registerUserWithUsername } from '@/lib/firebase/userProfile';
+import { createUserProfile, registerUserWithUsername, getUserProfile } from '@/lib/firebase/userProfile';
 import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
-import { checkAndUpdateRateLimit } from "@/ai/flows/rateLimitFirestore";
-import { getUserProfile } from '@/lib/firebase/userProfile';
 
 function generateRandomUsername() {
   const random = Math.random().toString(36).substring(2, 8);
   return `user-${random}`;
-}
-
-// In-memory brute-force protection (per session, per email)
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_TIME_MS = 5 * 60 * 1000; // 5 minutes
-const failedAttempts: Record<string, { count: number; lastFailed: number; lockedUntil?: number }> = {};
-
-function isLockedOut(email: string) {
-  const entry = failedAttempts[email];
-  if (!entry) return false;
-  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
-  return false;
-}
-
-function recordFailedAttempt(email: string) {
-  const now = Date.now();
-  if (!failedAttempts[email]) {
-    failedAttempts[email] = { count: 1, lastFailed: now };
-  } else {
-    failedAttempts[email].count += 1;
-    failedAttempts[email].lastFailed = now;
-    if (failedAttempts[email].count >= MAX_FAILED_ATTEMPTS) {
-      failedAttempts[email].lockedUntil = now + LOCKOUT_TIME_MS;
-    }
-  }
-}
-
-function resetFailedAttempts(email: string) {
-  delete failedAttempts[email];
 }
 
 // Auth state and action types
@@ -80,8 +50,16 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+/**
+ * AuthContext provides authentication state and actions for the app.
+ * Handles user sign-in, registration, provider login, and session management.
+ * Uses reducer for predictable state updates and deduplication for concurrent requests.
+ */
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Reducer for authentication state. Handles user, loading, error, and pending requests.
+ */
 function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'SET_USER':
@@ -105,6 +83,9 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   }
 }
 
+/**
+ * Maps Firebase Auth errors to user-friendly messages.
+ */
 function mapAuthError(error: any): string {
   if (!error) return 'Unknown error.';
   switch (error.code) {
@@ -123,6 +104,11 @@ function mapAuthError(error: any): string {
   }
 }
 
+/**
+ * AuthProvider wraps the app and provides authentication context.
+ * Handles auth state changes, sign-in, registration, and sign-out.
+ * Uses deduplication to prevent duplicate requests.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, {
     user: null,
@@ -204,10 +190,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error: any) {
         if (error.code === 'auth/account-exists-with-different-credential') {
           const email = error.customData?.email || error.email;
+          const pendingCred = GoogleAuthProvider.credentialFromError?.(error);
           const methods = await fetchSignInMethodsForEmail(auth, email);
-          if (methods.includes('password')) {
+          if (methods.includes('password') && pendingCred) {
+            // Instead of returning an error, prompt for password and link automatically
+            // We'll return a special object to trigger the password prompt in the UI
             return {
-              error: 'This email is registered with a password. Please sign in with your password, then link Google in your account settings.'
+              error: undefined,
+              requirePasswordToLink: true,
+              email,
+              pendingCred,
             };
           }
           return { error: 'This email is registered with another provider.' };
@@ -219,32 +211,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const RATE_LIMIT_ATTEMPTS = 10;
-  const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-
   const signInWithEmail = async (
     email: string,
     password: string
   ): Promise<User | null> => {
-    if (isLockedOut(email)) {
-      dispatch({ type: 'SET_ERROR', error: `Too many failed attempts. Try again in 5 minutes.` });
-      return null;
-    }
     // Server-side rate limit check
-    const rateLimitKey = `signin_${email.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
-    // Placeholder: get user IP (should be set server-side or via trusted header)
-    let userIp: string | undefined = undefined;
-    // Example: if using Next.js API route, get from req.headers['x-forwarded-for']
     try {
-      const rateLimit = await checkAndUpdateRateLimit({
-        key: rateLimitKey,
-        limit: RATE_LIMIT_ATTEMPTS,
-        windowMs: RATE_LIMIT_WINDOW_MS,
-        ip: userIp,
+      const res = await fetch('/api/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
-      if (!rateLimit.allowed) {
-        const retrySec = Math.ceil((rateLimit.retryAfter || 0) / 1000);
-        dispatch({ type: 'SET_ERROR', error: `Too many sign-in attempts. Try again in ${retrySec} seconds.` });
+      const data = await res.json();
+      if (!res.ok || !data.allowed) {
+        const retrySec = data?.error?.match(/(\d+)/)?.[1] || '60';
+        dispatch({ type: 'SET_ERROR', error: data?.error || `Too many sign-in attempts. Try again in ${retrySec} seconds.` });
         return null;
       }
     } catch (e) {
@@ -252,14 +233,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Rate limit check failed', e);
     }
     return withRequestDeduplication(`signIn_email_${email}`, async () => {
-      try {      if (!auth) throw new Error('Internal error: Auth not initialized.');
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      resetFailedAttempts(email);
+      try {
+        if (!auth) throw new Error('Internal error: Auth not initialized.');
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        // Only require email verification for email/password sign-in, not for Google sign-in
+        if (!userCredential.user.emailVerified) {
+          await sendEmailVerification(userCredential.user);
+          dispatch({ type: 'SET_ERROR', error: 'Please verify your email address. A verification link has been sent.' });
+          await firebaseSignOut(auth);
+          return null;
+        }
         dispatch({ type: 'SET_USER', user: userCredential.user });
         dispatch({ type: 'SET_ERROR', error: null });
         return userCredential.user;
       } catch (error: any) {
-        recordFailedAttempt(email);
         const mappedError = mapAuthError(error);
         dispatch({ type: 'SET_ERROR', error: mappedError });
         return null;
@@ -293,46 +280,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         if (!res.ok) {
           // Optionally: delete the Firebase user if registration fails
-          if (result.user) await result.user.delete();
-          return { error: data.error || 'Registration failed.' };
+          if (data.error === 'Username already taken') {
+            return { error: 'This username is already taken. Please choose another.' };
+          }
+          return { error: 'Registration failed. Please try again.' };
         }
+        dispatch({ type: 'SET_USER', user: result.user });
+        dispatch({ type: 'SET_ERROR', error: null });
         return result.user;
       } catch (error: any) {
         const mappedError = mapAuthError(error);
         dispatch({ type: 'SET_ERROR', error: mappedError });
         return { error: mappedError };
       }
-    }) as Promise<User | null | { error: string }>;
-  };
-
-  const clearError = () => dispatch({ type: 'SET_ERROR', error: null });
-
-  const signOut = async (): Promise<void> => {
-    return withRequestDeduplication('signOut', async () => {
-      if (!auth) return;
-      try {
-        await firebaseSignOut(auth);
-      } catch (error) {
-        console.error('Error signing out:', error);
-        const mappedError = mapAuthError(error);
-        dispatch({ type: 'SET_ERROR', error: mappedError });
-      }
     });
   };
 
-  const value = useMemo(
-    () => ({
-      user: state.user,
-      isLoading: state.isLoading,
-      error: state.error,
-      signInWithProvider,
-      signInWithEmail,
-      registerWithEmail,
-      clearError,
-      signOut,
-    }),
-    [state.user, state.isLoading, state.error]
-  );
+  const signOut = async () => {
+    if (auth) {
+      await firebaseSignOut(auth);
+    }
+    dispatch({ type: 'SET_USER', user: null });
+  };
+
+  const clearError = () => {
+    dispatch({ type: 'SET_ERROR', error: null });
+  };
+
+  const value = useMemo(() => ({
+    user: state.user,
+    isLoading: state.isLoading,
+    error: state.error,
+    signInWithProvider,
+    signInWithEmail,
+    registerWithEmail,
+    clearError,
+    signOut,
+  }), [state]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -341,10 +325,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Custom hook to access AuthContext.
+ * Throws if used outside AuthProvider.
+ */
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }

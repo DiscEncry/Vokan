@@ -2,15 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase/firebaseConfig';
 import { doc, runTransaction } from 'firebase/firestore';
 import { z } from 'zod';
-import zxcvbn from 'zxcvbn';
 
-// Registration schema (reuse from validation.ts if possible)
-const registrationSchema = z.object({
+const signinSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(100),
-  username: z.string().min(3).max(20).regex(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/),
-  uid: z.string(),
-  provider: z.enum(['google', 'password']),
 });
 
 const RATE_LIMIT_ATTEMPTS = 10;
@@ -49,34 +44,19 @@ async function checkAndUpdateRateLimit(email: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const parsed = registrationSchema.safeParse(body);
+    const parsed = signinSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
-    const { email, username, uid, provider, password } = parsed.data;
-    // Server-side password strength validation
-    const pwStrength = zxcvbn(password);
-    if (pwStrength.score < 3) {
-      return NextResponse.json({ error: 'Password is too weak. Please use a mix of uppercase, lowercase, numbers, and symbols.' }, { status: 400 });
-    }
+    const { email } = parsed.data;
     // Rate limit by email
     const rateLimit = await checkAndUpdateRateLimit(email.replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
     if (!rateLimit.allowed) {
-      return NextResponse.json({ error: `Too many registration attempts. Try again in ${Math.ceil((rateLimit.retryAfter || 0) / 1000)} seconds.` }, { status: 429 });
+      return NextResponse.json({ error: `Too many sign-in attempts. Try again in ${Math.ceil((rateLimit.retryAfter || 0) / 1000)} seconds.` }, { status: 429 });
     }
-    // Atomic registration: username lock + user profile
-    const userRef = doc(firestore, 'users', uid);
-    const usernameRef = doc(firestore, 'usernames', username.toLowerCase());
-    await runTransaction(firestore, async (transaction) => {
-      const usernameSnap = await transaction.get(usernameRef);
-      if (usernameSnap.exists()) {
-        throw new Error('Username already taken');
-      }
-      transaction.set(userRef, { ...parsed.data, createdAt: new Date().toISOString() }, { merge: false });
-      transaction.set(usernameRef, { uid, username: username.toLowerCase() });
-    });
-    return NextResponse.json({ success: true });
+    // Do not perform sign-in here; let the client handle Firebase Auth sign-in after passing rate limit
+    return NextResponse.json({ allowed: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || 'Registration failed.' }, { status: 400 });
+    return NextResponse.json({ error: e.message || 'Sign-in failed.' }, { status: 400 });
   }
 }

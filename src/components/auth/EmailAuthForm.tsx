@@ -18,9 +18,10 @@ interface EmailAuthFormProps {
   onToggleModeAction: () => void;
   onGoogleSignIn?: () => Promise<void>; // Ensure async signature
   googleLoading?: boolean;
+  onShowPasswordReset?: () => void;
 }
 
-export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAction, onGoogleSignIn, googleLoading }: EmailAuthFormProps) {
+export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAction, onGoogleSignIn, googleLoading, onShowPasswordReset }: EmailAuthFormProps) {
   const { signInWithEmail, registerWithEmail, signInWithProvider, error: authError, clearError, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   // Restore local googleLoading state for fallback
@@ -286,6 +287,18 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
             : "Need an account? Create one"}
         </button>
       </div>
+      {!isRegistering && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="text-sm text-blue-600 hover:underline"
+            onClick={onShowPasswordReset}
+            tabIndex={0}
+          >
+            Forgot password?
+          </button>
+        </div>
+      )}
     </form>
   );
 }

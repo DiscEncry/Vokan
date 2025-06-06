@@ -8,15 +8,9 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/context/AuthContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useTheme } from 'next-themes';
-import { Loader2, Shield, User, Download, Lock, Bell, Palette, Volume2, Share2, CalendarClock } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import DevDeleteAllAccountsButton from '@/components/auth/DevDeleteAllAccountsButton';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -60,11 +54,16 @@ export default function SettingsPage() {
       setUpdatingPrefs(prev => ({ ...prev, [key]: false }));
     }
   };
+
   if (!user) {
     return (
       <div className="container max-w-6xl mx-auto p-6">
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
           <div className="text-lg font-semibold mb-2">You must be signed in to view your settings.</div>
+          {/* Dev-only: allow deleting all accounts even if not signed in */}
+          <div className="mt-8">
+            <DevDeleteAllAccountsButton />
+          </div>
         </div>
       </div>
     );
@@ -95,19 +94,17 @@ export default function SettingsPage() {
     );
   }
   return (
-    <div className="container max-w-2xl mx-auto p-6">
+    <div className="container max-w-6xl mx-auto p-6">
       <div className="flex flex-col space-y-4 mb-8">
         <h1 className="text-3xl font-bold">Account Settings</h1>
         <p className="text-muted-foreground">
           Manage your account information and security
         </p>
       </div>
+      <div className="mb-8">
+        <ProfileForm initialProfile={profile} />
+      </div>
       <div className="space-y-8">
-        {/* Username Change */}
-        <div className="bg-card rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-2">Profile</h2>
-          <ProfileForm initialProfile={profile} />
-        </div>
         {/* Email Change */}
         <div className="bg-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-2">Change Email</h2>
@@ -153,6 +150,10 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold mb-2 text-red-600">Delete Account</h2>
           <AccountDeletionForm />
         </div>
+      </div>
+      {/* Dev-only: Danger zone for deleting all accounts */}
+      <div className="mt-8">
+        <DevDeleteAllAccountsButton />
       </div>
     </div>
   );

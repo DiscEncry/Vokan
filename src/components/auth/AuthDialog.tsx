@@ -1,21 +1,35 @@
 "use client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { FormStatusMessage } from '@/components/ui/FormStatusMessage';
 
 import EmailAuthForm from "./EmailAuthForm";
+import PasswordResetForm from "./PasswordResetForm";
 import { useAuthDialog } from "@/context/AuthDialogContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useState, useCallback } from "react";
 import { useRouter } from 'next/navigation';
+import LoginForm from "./LoginForm";
+import RegisterForm from "./RegisterForm";
+import { auth } from '@/lib/firebase/firebaseConfig';
+import { linkWithCredential } from 'firebase/auth';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AuthDialog() {
   const { open, closeDialog, isRegistering, setRegistering } = useAuthDialog();
-  const { signInWithProvider, isLoading: authLoading, clearError } = useAuth();
-  const { profile, loading: profileLoading, forceRefresh } = useUserProfile();
+  const { signInWithProvider, signInWithEmail, isLoading: authLoading, clearError } = useAuth();
+  const { profile, loading: profileLoading, error: profileError, forceRefresh } = useUserProfile();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [pendingGoogleUser, setPendingGoogleUser] = useState<{ email: string | undefined, uid: string | undefined } | null>(null);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [pendingGoogleLink, setPendingGoogleLink] = useState<null | { email: string, pendingCred: any }>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   console.log('[AuthDialog] rendered, open:', open, 'isRegistering:', isRegistering);
 
@@ -28,16 +42,30 @@ export default function AuthDialog() {
   const handleGoogleSignIn = useCallback(async () => {
     setIsGoogleLoading(true);
     clearError();
+    setLinkError(null);
     try {
       const result = await signInWithProvider("google");
-      // Only show welcome if result is an object and not a User instance
-      if (result && typeof result === "object" && 'showWelcome' in result && (result as any).showWelcome) {
+      if (
+        result &&
+        typeof result === "object" &&
+        'requirePasswordToLink' in result &&
+        result.requirePasswordToLink &&
+        typeof result.email === 'string' &&
+        result.email &&
+        'pendingCred' in result &&
+        result.pendingCred
+      ) {
+        // Show password prompt for seamless linking
+        setPendingGoogleLink({ email: result.email, pendingCred: result.pendingCred });
+        return;
+      }
+      if (result && typeof result === "object" && 'showWelcome' in result && result.showWelcome) {
         setPendingGoogleUser({
-          email: (result as any).email || '',
-          uid: (result as any).uid || ''
+          email: result.email || '',
+          uid: result.uid || ''
         });
         setShowWelcome(true);
-        forceRefresh(); // Ensure profile is loaded
+        forceRefresh();
       } else {
         setShowWelcome(false);
         setPendingGoogleUser(null);
@@ -45,10 +73,40 @@ export default function AuthDialog() {
         closeDialog();
         setRegistering(false);
       }
+    } catch (e: any) {
+      setLinkError(e?.message || 'Google sign-in failed. Please try again.');
+      toast({ title: 'Google sign-in failed', description: e?.message || 'Please try again.', variant: 'destructive' });
     } finally {
       setIsGoogleLoading(false);
     }
-  }, [signInWithProvider, clearError, closeDialog, setRegistering, forceRefresh]);
+  }, [signInWithProvider, clearError, closeDialog, setRegistering, forceRefresh, toast]);
+
+  // Handler for password entry to link Google
+  const handleLinkGoogleWithPassword = async (password: string) => {
+    if (!pendingGoogleLink) return;
+    setIsGoogleLoading(true);
+    clearError();
+    setLinkError(null);
+    try {
+      // Sign in with email/password
+      const user = await signInWithEmail(pendingGoogleLink.email, password);
+      if (user && auth && pendingGoogleLink.pendingCred) {
+        // Link Google credential
+        await linkWithCredential(user, pendingGoogleLink.pendingCred);
+        setPendingGoogleLink(null);
+        closeDialog();
+        forceRefresh();
+        toast({ title: 'Google account linked', description: 'You can now sign in with Google or email/password.', variant: 'success' });
+      } else {
+        throw new Error('Failed to sign in or link Google account.');
+      }
+    } catch (e: any) {
+      setLinkError(e?.message || 'Failed to link Google account.');
+      toast({ title: 'Linking failed', description: e?.message || 'Please check your password and try again.', variant: 'destructive' });
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   // Welcome dialog actions
   const handleSetPassword = () => {
@@ -67,11 +125,28 @@ export default function AuthDialog() {
   if ((authLoading || profileLoading) && !open && !showWelcome) {
     return null;
   }
+  // Show error if profile failed to load, but do NOT show if showWelcome is about to be shown
+  if (profileError && !profile && !profileLoading && !showWelcome && !pendingGoogleUser) {
+    return (
+      <Dialog open={true} onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Profile Error</DialogTitle>
+            <DialogDescription>{profileError}</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Button onClick={forceRefresh}>Retry</Button>
+            <Button variant="outline" onClick={closeDialog}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <>
       {/* Block UI until profile is loaded, but only show one dialog at a time */}
-      <Dialog open={showSignInDialog} onOpenChange={() => {}}>
+      <Dialog open={showSignInDialog && !showPasswordReset} onOpenChange={() => {}}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{isRegistering ? "Create Account" : "Welcome Back"}</DialogTitle>
@@ -79,13 +154,32 @@ export default function AuthDialog() {
               {isRegistering ? "Register a new account" : "Sign in to your account"}
             </DialogDescription>
           </DialogHeader>
-          <EmailAuthForm
-            isRegistering={isRegistering}
-            onToggleModeAction={() => setRegistering(!isRegistering)}
-            onGoogleSignIn={handleGoogleSignIn}
-            googleLoading={isGoogleLoading}
-            onSuccess={closeDialog}
-          />
+          {isRegistering ? (
+            <RegisterForm
+              onSuccess={closeDialog}
+              onGoogleSignIn={handleGoogleSignIn}
+              googleLoading={isGoogleLoading}
+              onShowLogin={() => setRegistering(false)}
+            />
+          ) : (
+            <LoginForm
+              onSuccess={closeDialog}
+              onShowPasswordReset={() => setShowPasswordReset(true)}
+              onGoogleSignIn={handleGoogleSignIn}
+              googleLoading={isGoogleLoading}
+              onShowRegister={() => setRegistering(true)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* Password reset dialog */}
+      <Dialog open={showPasswordReset} onOpenChange={() => setShowPasswordReset(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>Enter your email to receive a password reset link.</DialogDescription>
+          </DialogHeader>
+          <PasswordResetForm />
         </DialogContent>
       </Dialog>
       {/* Welcome dialog for new Google users */}
@@ -112,6 +206,48 @@ export default function AuthDialog() {
                 Skip for now
               </button>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {/* Password prompt for seamless Google linking */}
+      {pendingGoogleLink && (
+        <Dialog open={true} onOpenChange={() => setPendingGoogleLink(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Link Google Account</DialogTitle>
+              <DialogDescription>
+                Enter your password to link your Google account to your existing account.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const pw = (form.elements.namedItem('password') as HTMLInputElement).value;
+                handleLinkGoogleWithPassword(pw);
+              }}
+            >
+              <input
+                type="password"
+                name="password"
+                placeholder="Password"
+                className="input input-bordered w-full mb-4"
+                required
+                autoFocus
+                aria-label="Password"
+                aria-required="true"
+                style={isMobile ? { fontSize: '1.2em' } : {}}
+              />
+              <FormStatusMessage message={linkError} type="error" />
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isGoogleLoading}
+                aria-busy={isGoogleLoading}
+              >
+                {isGoogleLoading ? 'Linking...' : 'Link Account'}
+              </Button>
+            </form>
           </DialogContent>
         </Dialog>
       )}

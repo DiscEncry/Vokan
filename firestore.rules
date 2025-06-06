@@ -10,7 +10,9 @@ service cloud.firestore {
         && request.resource.data.username is string
         && request.resource.data.username.matches(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/)
         && request.resource.data.createdAt is timestamp
-        && request.resource.data.provider in ['google', 'password'];
+        && request.resource.data.provider in ['google', 'password']
+        // Add more thorough validation for all fields
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'username', 'createdAt', 'provider']);
       allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['username', 'email', 'uid', 'createdAt', 'provider'])
         && request.resource.data.uid == resource.data.uid
@@ -48,38 +50,14 @@ service cloud.firestore {
         && (request.resource.data.containsKey('loginNotifications') ? request.resource.data.loginNotifications is bool : true)
         && (request.resource.data.containsKey('darkMode') ? request.resource.data.darkMode in ['light', 'dark', 'system'] : true);
     }
-    // Word Details Cache: restrict write, validate data (example: only allow authenticated users)
+    // Word Details Cache: restrict write, validate data (example: only allow authenticated users, and validate fields)
     match /wordDetailsCache/{wordText} {
       allow read: if true;
-      allow write: if request.auth != null && request.resource.data.word is string && request.resource.data.details is map;
+      allow write: if request.auth != null
+        && request.resource.data.word is string
+        && request.resource.data.details is map
+        && request.resource.data.details.keys().hasAny(['definition', 'examples']);
     }
-    
-    // Deny all other access to unspecified paths by default
-    // This rule is intentionally broad and should be placed after more specific allow rules.
-    // However, given the /users/{userId}/{document=**} and /wordDetailsCache/{wordText} rules,
-    // this specific deny-all for any other top-level collection might be too restrictive
-    // if you plan to add other collections later without explicit rules.
-    // For now, to keep it functional with the cache, we'll ensure specific paths are open.
-    // Consider carefully if you add more top-level collections.
-    // A common practice is to deny by default and only allow specific paths.
-    // The current setup with the two explicit allows and then a general deny is one way.
-    // If you remove the below deny-all, ensure all collections have appropriate rules.
-    match /{path=**}/documents/{document} {
-       allow read, write: if false; // Default deny for any path not explicitly matched above.
-                                   // This is very restrictive. If you add new collections,
-                                   // you'll need to add rules for them *before* this.
-                                   // For /wordDetailsCache to work, its rule must be evaluated first.
-                                   // To be safe and ensure existing /users path works and new /wordDetailsCache works,
-                                   // and to prevent accidental open access to other future paths,
-                                   // we rely on Firestore's default behavior of "deny unless explicitly allowed".
-                                   // So, this explicit global deny might be redundant if all desired paths are explicitly allowed.
-                                   // Let's refine it to be more standard: deny all by default unless explicitly allowed by prior rules.
-    }
-    // The default behavior of Firestore is to deny all access unless explicitly allowed.
-    // So, the rules for /users and /wordDetailsCache will grant access,
-    // and any other path will be denied by default without needing an explicit global deny.
-    // However, if you had a "match /{document=**} { allow read, write: if false; }" previously at the root level
-    // of `match /databases/{database}/documents { ... }`, it needs to be managed carefully.
-    // Let's go with the explicit allow for users and cache, and other paths will be implicitly denied.
+    // Remove explicit global deny rule; Firestore denies by default.
   }
 }
