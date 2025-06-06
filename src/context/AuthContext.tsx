@@ -215,34 +215,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string
   ): Promise<User | null> => {
-    // Server-side rate limit check
-    try {
-      const res = await fetch('/api/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.allowed) {
-        const retrySec = data?.error?.match(/(\d+)/)?.[1] || '60';
-        dispatch({ type: 'SET_ERROR', error: data?.error || `Too many sign-in attempts. Try again in ${retrySec} seconds.` });
-        return null;
-      }
-    } catch (e) {
-      // If rate limit check fails, fail safe (allow sign-in, but log error)
-      console.error('Rate limit check failed', e);
-    }
     return withRequestDeduplication(`signIn_email_${email}`, async () => {
       try {
         if (!auth) throw new Error('Internal error: Auth not initialized.');
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        // Only require email verification for email/password sign-in, not for Google sign-in
-        if (!userCredential.user.emailVerified) {
-          await sendEmailVerification(userCredential.user);
-          dispatch({ type: 'SET_ERROR', error: 'Please verify your email address. A verification link has been sent.' });
-          await firebaseSignOut(auth);
-          return null;
-        }
+
         dispatch({ type: 'SET_USER', user: userCredential.user });
         dispatch({ type: 'SET_ERROR', error: null });
         return userCredential.user;
@@ -280,10 +257,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         if (!res.ok) {
           // Optionally: delete the Firebase user if registration fails
+          let errorMsg = 'Registration failed. Please try again.';
           if (data.error === 'Username already taken') {
-            return { error: 'This username is already taken. Please choose another.' };
+            errorMsg = 'This username is already taken. Please choose another.';
+          } else if (data.error) {
+            errorMsg = data.error;
           }
-          return { error: 'Registration failed. Please try again.' };
+          return { error: errorMsg };
         }
         dispatch({ type: 'SET_USER', user: result.user });
         dispatch({ type: 'SET_ERROR', error: null });

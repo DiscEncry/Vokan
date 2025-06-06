@@ -11,6 +11,7 @@ export default function PasswordResetForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setStatus(null);
     setLoading(true);
     try {
@@ -20,7 +21,13 @@ export default function PasswordResetForm() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to send reset email.");
+      if (!res.ok) {
+        let msg = data.error || "Failed to send reset email.";
+        if (msg.toLowerCase().includes("not found")) {
+          msg = "No account found with that email address.";
+        }
+        throw new Error(msg);
+      }
       setStatus({ type: "success", message: "Password reset email sent. Please check your inbox." });
     } catch (e: any) {
       setStatus({ type: "error", message: e.message || "Failed to send reset email." });

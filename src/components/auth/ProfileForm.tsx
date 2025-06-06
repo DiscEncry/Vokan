@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
-import { getUserProfile, createUserProfile } from "@/lib/firebase/userProfile";
-import { checkUsernameExists } from "@/lib/firebase/checkUsernameExists";
+import { createUserProfile } from "@/lib/firebase/userProfile";
+import { validateUsername } from "@/lib/validation";
+import { useDebounceEffect } from "@/hooks/useDebounce";
 import type { UserProfile } from "@/types/userProfile";
+import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 export default function ProfileForm({ initialProfile, onSuccess }: {
   initialProfile: UserProfile;
@@ -16,27 +18,72 @@ export default function ProfileForm({ initialProfile, onSuccess }: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameUnique, setUsernameUnique] = useState<null | boolean>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [touched, setTouched] = useState({ username: false });
+  const [debounced, setDebounced] = useState({ username: initialProfile.username });
+
+  useDebounceEffect(
+    () => {
+      setDebounced(d => ({ ...d, username }));
+    },
+    500,
+    [username]
+  );
+
+  useDebounceEffect(
+    () => {
+      const usernameValid = validateUsername(username);
+      if (!username || !usernameValid.isValid) {
+        setUsernameUnique(null);
+        setUsernameChecking(false);
+        setUsernameError(usernameValid.message || null);
+        return;
+      }
+      setUsernameChecking(true);
+      setUsernameUnique(null);
+      setUsernameError(null);
+      fetch(`/api/check-username?username=${encodeURIComponent(username)}`)
+        .then(res => res.json())
+        .then(data => {
+          setUsernameUnique(data.available);
+          if (!data.available) {
+            setUsernameError("This username is already taken. Please choose another.");
+          } else {
+            setUsernameError(null);
+          }
+        })
+        .catch(() => {
+          setUsernameUnique(null);
+          setUsernameError("Could not check username. Please try again.");
+        })
+        .finally(() => setUsernameChecking(false));
+    },
+    500,
+    [username]
+  );
+
+  // Validation helpers for username
+  const usernameValid = validateUsername(debounced.username).isValid && usernameUnique !== false;
+  // Error helpers for username
+  const usernameFormatError = touched.username && debounced.username && !validateUsername(debounced.username).isValid
+    ? 'Username must be 3-20 characters, start with a letter, and contain only letters, numbers, or underscores.'
+    : '';
+  const usernameTakenError = touched.username && usernameUnique === false ? 'This username is already taken. Please choose another.' : '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
-    if (!username) {
-      setError("Username is required.");
+    const usernameValid = validateUsername(username);
+    if (!usernameValid.isValid) {
+      setError(usernameValid.message);
       return;
     }
-    // Username validation: 3-20 chars, alphanumeric/underscore, no spaces, must start with a letter
-    const usernameRegex = /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/;
-    if (!usernameRegex.test(username)) {
-      setError("Username must be 3-20 characters, start with a letter, and contain only letters, numbers, or underscores.");
+    if (usernameUnique === false) {
+      setError("Username is already taken.");
       return;
-    }
-    if (username !== initialProfile.username) {
-      const exists = await checkUsernameExists(username);
-      if (exists) {
-        setError("Username is already taken.");
-        return;
-      }
     }
     setLoading(true);
     try {
@@ -59,15 +106,22 @@ export default function ProfileForm({ initialProfile, onSuccess }: {
       <Label htmlFor="email">Email</Label>
       <Input id="email" type="email" value={initialProfile.email} disabled />
       <Label htmlFor="username">Username</Label>
-      <Input
-        id="username"
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={e => setUsername(e.target.value)}
-        required
-        autoComplete="username"
-      />
+      <div className="relative">
+        <Input
+          id="username"
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={e => { setUsername(e.target.value); setTouched(t => ({ ...t, username: true })); }}
+          required
+          autoComplete="username"
+        />
+        {usernameValid && touched.username && (
+          <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+        )}
+      </div>
+      {usernameChecking && <div className="text-xs text-gray-500 mt-1">Checking username...</div>}
+      {!usernameValid && (usernameFormatError || usernameTakenError) && <div className="text-xs text-red-500 mt-1">{usernameFormatError || usernameTakenError}</div>}
       {error && <div className="text-red-500 text-xs">{error}</div>}
       {success && <div className="text-green-600 text-xs">Profile updated!</div>}
       <Button type="submit" variant="default" size="sm" disabled={loading}>

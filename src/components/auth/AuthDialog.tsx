@@ -126,9 +126,10 @@ export default function AuthDialog() {
     return null;
   }
   // Show error if profile failed to load, but do NOT show if showWelcome is about to be shown
-  if (profileError && !profile && !profileLoading && !showWelcome && !pendingGoogleUser) {
+  // FIX: Do not show Profile Error dialog if registering (registration handles its own errors)
+  if (profileError && !profile && !profileLoading && !showWelcome && !pendingGoogleUser && !isRegistering) {
     return (
-      <Dialog open={true} onOpenChange={() => {}}>
+      <Dialog open={true} onOpenChange={forceRefresh}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Profile Error</DialogTitle>
@@ -216,7 +217,8 @@ export default function AuthDialog() {
             <DialogHeader>
               <DialogTitle>Link Google Account</DialogTitle>
               <DialogDescription>
-                Enter your password to link your Google account to your existing account.
+                Enter your password to link your Google account to your existing account.<br />
+                <span className="text-xs text-gray-500">If you forgot your password, <a href="#" onClick={() => { setPendingGoogleLink(null); setShowPasswordReset(true); }} className="underline">reset it here</a>.</span>
               </DialogDescription>
             </DialogHeader>
             <form
@@ -237,6 +239,7 @@ export default function AuthDialog() {
                 aria-label="Password"
                 aria-required="true"
                 style={isMobile ? { fontSize: '1.2em' } : {}}
+                disabled={isGoogleLoading}
               />
               <FormStatusMessage message={linkError} type="error" />
               <Button

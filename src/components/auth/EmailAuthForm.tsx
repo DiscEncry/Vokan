@@ -9,7 +9,6 @@ import { ArrowRight, EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
 import { usePasswordValidation } from "@/hooks/usePasswordValidation";
 import { validateUsername, validatePassword, validatePasswordMatch, validateForm, registrationSchema } from "@/lib/validation";
 import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
-import UsernamePasswordRegistrationPanel from "@/components/auth/UsernamePasswordRegistrationPanel";
 import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 
 interface EmailAuthFormProps {
@@ -102,14 +101,6 @@ export default function EmailAuthForm({ onSuccess, isRegistering, onToggleModeAc
       // AuthContext handles errors, no need to duplicate error handling here
     }
   };
-
-  // Registration submit handler for shared panel
-  const [registrationPanelData, setRegistrationPanelData] = useState({
-    username: "",
-    password: "",
-    confirm: ""
-  });
-  const [registrationPanelValid, setRegistrationPanelValid] = useState(false);
 
   // Form field handlers
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

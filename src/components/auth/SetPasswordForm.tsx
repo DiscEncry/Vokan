@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
+import { CheckCircleIcon } from '@heroicons/react/24/solid';
+
 import { usePasswordValidation } from "@/hooks/usePasswordValidation";
 import { validatePassword, validatePasswordMatch, validateForm, setPasswordSchema } from "@/lib/validation";
 import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
 import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
+import { useDebounceEffect } from "@/hooks/useDebounce";
 
 interface SetPasswordFormProps {
   email: string;
@@ -52,6 +55,14 @@ export default function SetPasswordForm({
     setFormState(prev => ({ ...prev, ...updates }));
   };
 
+  // Track if user has finished typing (debounced) for each field
+  const [touched, setTouched] = useState({ password: false, confirmPassword: false });
+  const [debounced, setDebounced] = useState({ password: '', confirmPassword: '' });
+
+  // Debounce each field's value
+  useDebounceEffect(() => setDebounced(d => ({ ...d, password: formState.password })), 500, [formState.password]);
+  useDebounceEffect(() => setDebounced(d => ({ ...d, confirmPassword: formState.confirmPassword })), 500, [formState.confirmPassword]);
+
   // Compute validation state
   const validationState = useMemo(() => {
     const result = validateForm(setPasswordSchema, {
@@ -88,6 +99,18 @@ export default function SetPasswordForm({
     return { isValid: true, message: null };
   }, [formState, checking, strength]);
 
+  // Validation helpers for each field
+  const passwordValid = validatePassword(debounced.password).isValid && strength >= 3;
+  const confirmValid = debounced.confirmPassword && debounced.confirmPassword === debounced.password;
+
+  // Error helpers for each field
+  const passwordError = touched.password && debounced.password && !validatePassword(debounced.password).isValid
+    ? 'Your password must be at least 8 characters long.'
+    : (touched.password && strength < 3 ? 'Please choose a stronger password.' : '');
+  const confirmError = touched.confirmPassword && debounced.confirmPassword && debounced.confirmPassword !== debounced.password
+    ? 'The passwords you entered do not match.'
+    : '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validationState.isValid) return;
@@ -119,7 +142,6 @@ export default function SetPasswordForm({
           className="bg-muted"
         />
       </div>
-
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <div className="relative">
@@ -127,7 +149,7 @@ export default function SetPasswordForm({
             id="password"
             type={formState.showPassword ? "text" : "password"}
             value={formState.password}
-            onChange={(e) => updateFormState({ password: e.target.value })}
+            onChange={e => { updateFormState({ password: e.target.value }); setTouched(t => ({ ...t, password: true })); }}
             placeholder="Create a password"
             required
             disabled={loading}
@@ -138,7 +160,7 @@ export default function SetPasswordForm({
             type="button"
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-1/2 -translate-y-1/2"
+            className="absolute right-8 top-1/2 -translate-y-1/2"
             onClick={() => updateFormState({ showPassword: !formState.showPassword })}
             disabled={loading}
           >
@@ -148,10 +170,13 @@ export default function SetPasswordForm({
               <EyeIcon className="h-4 w-4" />
             )}
           </Button>
+          {passwordValid && touched.password && (
+            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
         </div>
         <PasswordStrengthMeter strength={strength} password={formState.password} />
+        {!passwordValid && passwordError && <div className="text-xs text-red-500 mt-1">{passwordError}</div>}
       </div>
-
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm Password</Label>
         <div className="relative">
@@ -159,7 +184,7 @@ export default function SetPasswordForm({
             id="confirmPassword"
             type={formState.showConfirmPassword ? "text" : "password"}
             value={formState.confirmPassword}
-            onChange={(e) => updateFormState({ confirmPassword: e.target.value })}
+            onChange={e => { updateFormState({ confirmPassword: e.target.value }); setTouched(t => ({ ...t, confirmPassword: true })); }}
             placeholder="Confirm password"
             required
             disabled={loading}
@@ -170,7 +195,7 @@ export default function SetPasswordForm({
             type="button"
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-1/2 -translate-y-1/2"
+            className="absolute right-8 top-1/2 -translate-y-1/2"
             onClick={() => updateFormState({ showConfirmPassword: !formState.showConfirmPassword })}
             disabled={loading}
           >
@@ -180,13 +205,14 @@ export default function SetPasswordForm({
               <EyeIcon className="h-4 w-4" />
             )}
           </Button>
+          {confirmValid && touched.confirmPassword && (
+            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
         </div>
+        {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}
       </div>
-
-      {/* Password strength and validation feedback */}
       <FormStatusMessage message={validationState.message} type="error" />
       <FormStatusMessage message={error} type="error" />
-
       <div className="space-y-2">
         <Button
           type="submit"
@@ -203,3 +229,6 @@ export default function SetPasswordForm({
     </form>
   );
 }
+
+// No major changes needed: SetPasswordForm already uses validation, password strength, and feedback matching registration UX.
+// If you want to add more real-time feedback or polish, you can add debounced validation or more granular error messages here.

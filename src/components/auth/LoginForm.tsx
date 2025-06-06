@@ -27,6 +27,7 @@ export default function LoginForm({ onSuccess, onShowPasswordReset, onGoogleSign
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     const result = await signInWithEmail(formData.email, formData.password);
     if (result) onSuccess?.();
   };
