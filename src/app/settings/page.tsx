@@ -11,8 +11,11 @@ import { useTheme } from 'next-themes';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import DevDeleteAllAccountsButton from '@/components/auth/DevDeleteAllAccountsButton';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
   const { preferences, loading: prefsLoading, error: prefsError, updatePreference } = useUserPreferences();
@@ -76,10 +79,7 @@ export default function SettingsPage() {
           <div className="h-8 w-48 bg-muted rounded"></div>
           <div className="h-4 w-96 bg-muted rounded"></div>
         </div>
-        <div className="flex flex-col items-center justify-center min-h-[40vh]">
-          <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mb-2" />
-          <div>Loading your settings...</div>
-        </div>
+        {/* Removed the second loading spinner and message */}
       </div>
     );
   }
@@ -95,6 +95,9 @@ export default function SettingsPage() {
   }
   return (
     <div className="container max-w-6xl mx-auto p-6">
+      <div className="mb-4">
+        <Button type="button" variant="outline" onClick={() => router.push('/')}>Go Home</Button>
+      </div>
       <div className="flex flex-col space-y-4 mb-8">
         <h1 className="text-3xl font-bold">Account Settings</h1>
         <p className="text-muted-foreground">

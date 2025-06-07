@@ -99,6 +99,9 @@ function mapAuthError(error: any): string {
       return 'Sign-in was cancelled.';
     case 'auth/account-exists-with-different-credential':
       return 'Account exists with a different sign-in method. Please use the correct provider.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+      return 'Incorrect email or password.';
     default:
       return error.message || 'Authentication failed.';
   }

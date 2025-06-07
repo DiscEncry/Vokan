@@ -120,7 +120,6 @@ export default function ProfileForm({ initialProfile, onSuccess }: {
           <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         )}
       </div>
-      {usernameChecking && <div className="text-xs text-gray-500 mt-1">Checking username...</div>}
       {!usernameValid && (usernameFormatError || usernameTakenError) && <div className="text-xs text-red-500 mt-1">{usernameFormatError || usernameTakenError}</div>}
       {error && <div className="text-red-500 text-xs">{error}</div>}
       {success && <div className="text-green-600 text-xs">Profile updated!</div>}
