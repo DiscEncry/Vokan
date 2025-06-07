@@ -8,7 +8,7 @@ import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
 import { validatePassword, validatePasswordMatch } from "@/lib/validation";
 import Link from "next/link";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { CheckCircle } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 import { usePasswordValidation } from "@/hooks/usePasswordValidation";
 import { useDebounceEffect } from "@/hooks/useDebounce";
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
             {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
           </button>
           {passwordValid && touched.password && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         <PasswordStrengthMeter strength={strength} password={form.password} />
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
             {showConfirm ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
           </button>
           {confirmValid && touched.confirm && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}

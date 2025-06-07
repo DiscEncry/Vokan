@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useReducer, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useMemo, ReactNode, useCallback } from 'react';
 import {
   GoogleAuthProvider,
   User,
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const signInWithProvider = async (
+  const signInWithProvider = useCallback(async (
     providerType: 'google',
     passwordToLink?: string
   ): Promise<User | null | { isNewUser?: boolean; showWelcome?: boolean; email?: string; error?: string; uid?: string }> => {
@@ -212,9 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: mappedError };
       }
     });
-  };
+  }, [state, dispatch]);
 
-  const signInWithEmail = async (
+  const signInWithEmail = useCallback(async (
     email: string,
     password: string
   ): Promise<User | null> => {
@@ -232,9 +232,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
     });
-  };
+  }, [state, dispatch]);
 
-  const registerWithEmail = async (
+  const registerWithEmail = useCallback(async (
     email: string,
     password: string,
     username?: string
@@ -277,18 +277,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: mappedError };
       }
     });
-  };
+  }, [state, dispatch]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     if (auth) {
       await firebaseSignOut(auth);
     }
     dispatch({ type: 'SET_USER', user: null });
-  };
+  }, [dispatch]);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: 'SET_ERROR', error: null });
-  };
+  }, [dispatch]);
 
   const value = useMemo(() => ({
     user: state.user,
@@ -299,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerWithEmail,
     clearError,
     signOut,
-  }), [state]);
+  }), [state.user, state.isLoading, state.error, signInWithProvider, signInWithEmail, registerWithEmail, clearError, signOut]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { CheckCircle } from "lucide-react";
 
 import { usePasswordValidation } from "@/hooks/usePasswordValidation";
 import { validatePassword, validatePasswordMatch, validateForm, setPasswordSchema } from "@/lib/validation";
@@ -171,7 +171,7 @@ export default function SetPasswordForm({
             )}
           </Button>
           {passwordValid && touched.password && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         <PasswordStrengthMeter strength={strength} password={formState.password} />
@@ -206,7 +206,7 @@ export default function SetPasswordForm({
             )}
           </Button>
           {confirmValid && touched.confirmPassword && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}

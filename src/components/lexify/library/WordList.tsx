@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState, useCallback, type FC } from 'react';
+import React, { memo, useState, useCallback, type FC, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -41,20 +41,13 @@ const LoadingSkeleton: FC = () => (
   </div>
 );
 
-const ROW_HEIGHT = 56; // px, adjust as needed for your row height
-const VISIBLE_COUNT = 9; // Number of rows visible at once (for 500px container)
-const PAGE_SIZE = 50;
-
-const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
-  const { deleteWord } = useVocabulary();
+const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage }) => {
+  const { deleteWord, fetchNextPage, hasMore, resetPagination } = useVocabulary();
   const { toast } = useToast();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [wordToDelete, setWordToDelete] = useState<{ id: string; text: string } | null>(null);
   const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [page, setPage] = useState(0);
-  const pageCount = Math.ceil(words.length / PAGE_SIZE);
-  const pagedWords = words.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleDeleteRequest = useCallback((wordId: string, wordText: string) => {
     setWordToDelete({ id: wordId, text: wordText });
@@ -79,7 +72,7 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
     setIsDeletingAll(true);
     try {
         // Cloud: delete all words in parallel for performance
-        const results = await Promise.allSettled(words.map(word => deleteWord(word.id)));
+        const results = await Promise.allSettled(propWords.map(word => deleteWord(word.id)));
         const failed = results.filter(r => r.status === 'rejected').length;
         showStandardToast(
           toast,
@@ -95,13 +88,13 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
       setIsDeletingAll(false);
       setIsDeleteAllOpen(false);
     }
-  }, [words, deleteWord, toast]);
+  }, [propWords, deleteWord, toast]);
 
   if (isLoading) {
     return <LoadingSkeleton />;
   }
 
-  if (!words || words.length === 0) {
+  if (!propWords || propWords.length === 0) {
     return <EmptyState 
       title="Your vocabulary library is empty."
       description={emptyMessage || "Add some words or import a list to get started!"}
@@ -112,16 +105,9 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
   return (
     <>
       <div className="flex justify-between items-center mb-2">
-        <Button variant="destructive" size="sm" onClick={() => setIsDeleteAllOpen(true)} disabled={words.length === 0}>
+        <Button variant="destructive" size="sm" onClick={() => setIsDeleteAllOpen(true)} disabled={propWords.length === 0}>
           Delete All Words
         </Button>
-        {pageCount > 1 && (
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Prev</Button>
-            <span className="text-sm">Page {page + 1} of {pageCount}</span>
-            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={page === pageCount - 1}>Next</Button>
-          </div>
-        )}
       </div>
       <ScrollArea className="h-[400px] md:h-[500px] rounded-md border shadow-inner">
         <Table>
@@ -134,7 +120,7 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pagedWords.map((word) => (
+            {propWords.map((word) => (
               <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
                 <TableCell className="font-medium text-base py-3 flex items-center gap-2 h-14 min-h-[3.5rem]"> {/* h-14 = 56px, matches ROW_HEIGHT */}
                   {word.text}
@@ -159,6 +145,13 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
           </TableBody>
         </Table>
       </ScrollArea>
+      {hasMore && (
+        <div className="flex justify-center mt-4">
+          <Button onClick={fetchNextPage} disabled={isLoading} variant="outline">
+            {isLoading ? 'Loading...' : 'Load More'}
+          </Button>
+        </div>
+      )}
 
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
@@ -182,7 +175,7 @@ const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete ALL words?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <strong>{words.length}</strong> words from your library. This action cannot be undone.
+              This will permanently remove <strong>{propWords.length}</strong> words from your library. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

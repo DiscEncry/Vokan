@@ -7,7 +7,7 @@ import { createUserProfile } from "@/lib/firebase/userProfile";
 import { validateUsername } from "@/lib/validation";
 import { useDebounceEffect } from "@/hooks/useDebounce";
 import type { UserProfile } from "@/types/userProfile";
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { CheckCircle } from "lucide-react";
 
 export default function ProfileForm({ initialProfile, onSuccess }: {
   initialProfile: UserProfile;
@@ -117,7 +117,7 @@ export default function ProfileForm({ initialProfile, onSuccess }: {
           autoComplete="username"
         />
         {usernameValid && touched.username && (
-          <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         )}
       </div>
       {!usernameValid && (usernameFormatError || usernameTakenError) && <div className="text-xs text-red-500 mt-1">{usernameFormatError || usernameTakenError}</div>}

@@ -27,8 +27,16 @@ export function AuthDialogProvider({ children }: { children: React.ReactNode }) 
     console.log('[AuthDialogContext] closeDialog called');
   }, []);
 
+  const contextValue = React.useMemo(() => ({
+    open,
+    openDialog,
+    closeDialog,
+    isRegistering,
+    setRegistering: setIsRegistering,
+  }), [open, openDialog, closeDialog, isRegistering]);
+
   return (
-    <AuthDialogContext.Provider value={{ open, openDialog, closeDialog, isRegistering, setRegistering: setIsRegistering }}>
+    <AuthDialogContext.Provider value={contextValue}>
       {children}
     </AuthDialogContext.Provider>
   );

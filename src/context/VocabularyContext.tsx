@@ -16,7 +16,13 @@ import {
   orderBy,
   Unsubscribe,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  writeBatch,
+  startAfter,
+  limit,
+  getDocs,
+  QueryDocumentSnapshot,
+  Firestore // <-- Add this import for type casting
 } from 'firebase/firestore';
 import { FSRS, createEmptyCard, Rating } from 'ts-fsrs';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +56,10 @@ interface VocabularyContextType {
   getDecoyWords: (targetWordId: string, count: number) => Word[];
   isLoading: boolean;
   isSyncing: boolean;
+  // Pagination
+  fetchNextPage: () => Promise<void>;
+  hasMore: boolean;
+  resetPagination: () => void;
 }
 
 const VocabularyContext = createContext<VocabularyContextType | undefined>(undefined);
@@ -62,22 +72,17 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  // const isLocalOnly = !user; // REMOVE: Only allow users with account
+  const PAGE_SIZE = 50;
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   // Abuse prevention: simple in-memory rate limit for addWord
   const addWordTimestamps = useRef<number[]>([]);
 
   const addWord = useCallback(async (text: string): Promise<boolean> => {
-    // Abuse prevention: limit to 10 adds per minute
-    const now = Date.now();
-    addWordTimestamps.current = addWordTimestamps.current.filter(ts => now - ts < 60000);
-    if (addWordTimestamps.current.length >= 10) {
-      showStandardToast(toast, 'error', 'Rate limit', 'You are adding words too quickly. Please wait a moment.');
-      return false;
-    }
-    addWordTimestamps.current.push(now);
-    if (!text?.trim() || text.trim().length > MAX_WORD_LENGTH) return false;
     const normalizedText = text.trim();
+    if (!normalizedText || normalizedText.length > MAX_WORD_LENGTH) return false;
+    // Prevent duplicate by text (case-insensitive)
     if (words.some(w => w.text.toLowerCase() === normalizedText.toLowerCase())) return false;
     const newWord: Word = {
       id: uuidv4(),
@@ -88,18 +93,14 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (user && firestore) {
         setIsSyncing(true);
-        const wordDoc = firestore ? doc(firestore, `users/${user.uid}/words/${newWord.id}`) : null;
-        if (wordDoc) await setDoc(wordDoc, newWord);
-      } else {
-        setWords(prevWords => [newWord, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
+        const wordDoc = doc(firestore as Firestore, `users/${user.uid}/words/${newWord.id}`);
+        await setDoc(wordDoc, newWord);
+        // No local setWords: Firestore onSnapshot will update state
       }
       return true;
     } catch (error) {
       console.error("[VocabularyContext] Error adding word:", error);
       showStandardToast(toast, 'error', 'Error', 'Failed to add word. Please try again.');
-      if (!user) {
-        setWords(prevWords => [newWord, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
-      }
       return false;
     } finally {
       if (user) setIsSyncing(false);
@@ -108,9 +109,10 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
 
   const addWordsBatch = useCallback(async (texts: string[]): Promise<number> => {
     if (!texts?.length) return 0;
-    const newWords: Word[] = texts
-      .map(text => text.trim())
-      .filter(text => text && !words.some(w => w.text.toLowerCase() === text.toLowerCase()))
+    // Remove duplicates in batch and against existing words
+    const uniqueTexts = Array.from(new Set(texts.map(t => t.trim().toLowerCase())));
+    const newWords: Word[] = uniqueTexts
+      .filter(text => text && !words.some(w => w.text.toLowerCase() === text))
       .map(text => ({
         id: uuidv4(),
         text,
@@ -120,21 +122,18 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (user && firestore) {
         setIsSyncing(true);
-        const promises = newWords.map(word => {
-          const wordDoc = firestore ? doc(firestore, `users/${user.uid}/words/${word.id}`) : null;
-          return wordDoc ? setDoc(wordDoc, word) : Promise.resolve();
+        const batch = writeBatch(firestore);
+        newWords.forEach(word => {
+          const wordDoc = doc(firestore as Firestore, `users/${user.uid}/words/${word.id}`);
+          batch.set(wordDoc, word);
         });
-        await Promise.all(promises);
-      } else {
-        setWords(prevWords => [...newWords, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
+        await batch.commit();
+        // No local setWords: Firestore onSnapshot will update state
       }
       return newWords.length;
     } catch (error) {
       console.error("[VocabularyContext] Error adding words batch:", error);
       showStandardToast(toast, 'error', 'Error', 'Failed to add some words. Please try again.');
-      if (!user) {
-        setWords(prevWords => [...newWords, ...prevWords].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()));
-      }
       return 0;
     } finally {
       if (user) setIsSyncing(false);
@@ -238,7 +237,44 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     return generateDecoyWords(words, targetWordId, count);
   }, [words]);
 
-  // Listen to Firestore for real-time updates to the user's words
+  // Reset pagination (e.g., on user change)
+  const resetPagination = useCallback(() => {
+    setWords([]);
+    setLastVisible(null);
+    setHasMore(true);
+  }, []);
+
+  // Fetch next page of words
+  const fetchNextPage = useCallback(async () => {
+    if (!user || !firestore || !hasMore) return;
+    setIsLoading(true);
+    let q;
+    if (lastVisible) {
+      q = query(
+        collection(firestore, `users/${user.uid}/words`),
+        orderBy('dateAdded', 'desc'),
+        startAfter(lastVisible),
+        limit(PAGE_SIZE)
+      );
+    } else {
+      q = query(
+        collection(firestore, `users/${user.uid}/words`),
+        orderBy('dateAdded', 'desc'),
+        limit(PAGE_SIZE)
+      );
+    }
+    const snap = await getDocs(q);
+    const newWords: Word[] = snap.docs.map(doc => {
+      const data = doc.data() || {};
+      return { id: doc.id, ...data } as Word;
+    });
+    setWords(prev => [...prev, ...newWords]);
+    setLastVisible(snap.docs[snap.docs.length - 1] || lastVisible);
+    setHasMore(newWords.length === PAGE_SIZE);
+    setIsLoading(false);
+  }, [user, firestore, hasMore, lastVisible]);
+
+  // Listen to Firestore for real-time updates to the first page only
   useEffect(() => {
     if (!user || !firestore) {
       setWords([]);
@@ -246,10 +282,13 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     setIsLoading(true);
-    const q = query(collection(firestore, `users/${user.uid}/words`), orderBy('dateAdded', 'desc'));
+    const q = query(collection(firestore, `users/${user.uid}/words`), orderBy('dateAdded', 'desc'), limit(PAGE_SIZE));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const wordsData: Word[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Word));
+      // Always replace state with Firestore data (no merge)
       setWords(wordsData);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(wordsData.length === PAGE_SIZE);
       setIsLoading(false);
     }, (error) => {
       console.error('[VocabularyContext] Firestore onSnapshot error:', error);
@@ -259,7 +298,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, [user, firestore, toast]);
 
-  const contextValue = {
+  const contextValue = useMemo(() => ({
     words,
     addWord,
     addWordsBatch,
@@ -269,8 +308,11 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     getDecoyWords,
     isLoading,
     isSyncing,
-    isLocalOnly: false, // Always false, local-only mode is not supported
-  };
+    fetchNextPage,
+    hasMore,
+    resetPagination,
+    isLocalOnly: false,
+  }), [words, addWord, addWordsBatch, updateWordSRS, deleteWord, getWordById, getDecoyWords, isLoading, isSyncing, fetchNextPage, hasMore, resetPagination]);
 
   return (
     <VocabularyContext.Provider value={contextValue}>

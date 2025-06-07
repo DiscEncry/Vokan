@@ -9,7 +9,7 @@ import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useDebounceEffect } from "@/hooks/useDebounce";
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { CheckCircle } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 
 interface RegisterFormProps {
@@ -141,7 +141,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         <div className="relative">
           <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required autoComplete="email" disabled={isLoading} placeholder="Enter your email" />
           {emailValid && touched.email && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         {/* Removed emailChecking text */}
@@ -152,7 +152,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         <div className="relative">
           <Input id="username" name="username" type="text" value={formData.username} onChange={handleChange} required autoComplete="username" minLength={3} maxLength={20} pattern="[a-zA-Z][a-zA-Z0-9_]{2,19}" disabled={isLoading} placeholder="Choose a username" />
           {usernameValid && touched.username && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         {/* Removed usernameChecking text */}
@@ -166,7 +166,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
             {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
           </button>
           {passwordValid && touched.password && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         <PasswordStrengthMeter strength={strength} password={formData.password} />
@@ -180,7 +180,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
             {showConfirm ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
           </button>
           {confirmValid && touched.confirm && (
-            <CheckCircleIcon className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}
