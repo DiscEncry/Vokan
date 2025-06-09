@@ -1,8 +1,9 @@
 "use client";
 
-import React, { memo, useState, useCallback, type FC, useEffect } from 'react';
+import React, { memo, useState, useCallback, type FC } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Word } from '@/types';
 import { Sparkles, Flame, ThumbsUp, BadgeCheck, HelpCircle, Trash2, CalendarClock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -40,23 +41,20 @@ const LoadingSkeleton: FC = () => (
   </div>
 );
 
-const PAGE_SIZE = 15;
-const BATCH_SIZE = 200;
+const ROW_HEIGHT = 56; // px, adjust as needed for your row height
+const VISIBLE_COUNT = 9; // Number of rows visible at once (for 500px container)
+const PAGE_SIZE = 50;
 
-const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage }) => {
-  const { deleteWord } = useVocabulary();
+const WordList: FC<WordListProps> = ({ words, isLoading, emptyMessage }) => {
+  const { deleteWord, isLocalOnly } = useVocabulary();
   const { toast } = useToast();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [wordToDelete, setWordToDelete] = useState<{ id: string; text: string } | null>(null);
   const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [page, setPage] = useState(0);
-  const [deleteProgress, setDeleteProgress] = useState(0); // Progress state (0-100)
-  const [deleteProgressInfo, setDeleteProgressInfo] = useState({ current: 0, total: 0 });
-  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
-
-  const pageCount = Math.ceil(propWords.length / PAGE_SIZE);
-  const pagedWords = propWords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const pageCount = Math.ceil(words.length / PAGE_SIZE);
+  const pagedWords = words.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleDeleteRequest = useCallback((wordId: string, wordText: string) => {
     setWordToDelete({ id: wordId, text: wordText });
@@ -76,51 +74,40 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
     }
   }, [wordToDelete, deleteWord, toast]);
 
-  const startDeleteAll = useCallback(() => {
-    setIsDeleteConfirming(true);
-    setDeleteProgress(0);
-    setDeleteProgressInfo({ current: 0, total: propWords.length });
-    setTimeout(async () => {
-      setIsDeletingAll(true);
-      try {
-        for (let i = 0; i < propWords.length; i += BATCH_SIZE) {
-          const batch = propWords.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map(word => deleteWord(word.id)));
-          const done = Math.min(i + batch.length, propWords.length);
-          setDeleteProgress(Math.round((done / propWords.length) * 100));
-          setDeleteProgressInfo({
-            current: done,
-            total: propWords.length
-          });
-        }
-        setDeleteProgress(100);
-        setDeleteProgressInfo({
-          current: propWords.length,
-          total: propWords.length
-        });
+  // Delete all words handler
+  const handleDeleteAll = useCallback(async () => {
+    setIsDeletingAll(true);
+    try {
+      if (isLocalOnly) {
+        localStorage.removeItem('lexify-vocabulary');
+        showStandardToast(toast, 'success', 'All Words Deleted', 'All words have been removed from your library.');
+        window.location.reload();
+      } else {
+        // Cloud: delete all words in parallel for performance
+        const results = await Promise.allSettled(words.map(word => deleteWord(word.id)));
+        const failed = results.filter(r => r.status === 'rejected').length;
         showStandardToast(
           toast,
-          'success',
+          failed === 0 ? 'success' : 'error',
           'All Words Deleted',
-          'All words have been removed from your library.'
+          failed === 0
+            ? 'All words have been removed from your library.'
+            : `Some words could not be deleted (${failed} failed). Please refresh and try again if needed.`
         );
-      } catch (e) {
-        showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
-      } finally {
-        setIsDeletingAll(false);
-        setIsDeleteConfirming(false);
-        setDeleteProgress(0);
-        setDeleteProgressInfo({ current: 0, total: 0 });
-        setIsDeleteAllOpen(false);
       }
-    }, 100);
-  }, [propWords, deleteWord, toast]);
+    } catch (e) {
+      showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
+    } finally {
+      setIsDeletingAll(false);
+      setIsDeleteAllOpen(false);
+    }
+  }, [isLocalOnly, words, deleteWord, toast]);
 
   if (isLoading) {
     return <LoadingSkeleton />;
   }
 
-  if (!propWords || propWords.length === 0) {
+  if (!words || words.length === 0) {
     return <EmptyState 
       title="Your vocabulary library is empty."
       description={emptyMessage || "Add some words or import a list to get started!"}
@@ -131,7 +118,7 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
   return (
     <>
       <div className="flex justify-between items-center mb-2">
-        <Button variant="destructive" size="sm" onClick={() => setIsDeleteAllOpen(true)} disabled={propWords.length === 0}>
+        <Button variant="destructive" size="sm" onClick={() => setIsDeleteAllOpen(true)} disabled={words.length === 0}>
           Delete All Words
         </Button>
         {pageCount > 1 && (
@@ -142,7 +129,7 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
           </div>
         )}
       </div>
-      <div className="rounded-md border shadow-inner">
+      <ScrollArea className="h-[400px] md:h-[500px] rounded-md border shadow-inner">
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
@@ -155,7 +142,7 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
           <TableBody>
             {pagedWords.map((word) => (
               <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
-                <TableCell className="font-medium text-base py-3 flex items-center gap-2 h-14 min-h-[3.5rem]">
+                <TableCell className="font-medium text-base py-3 flex items-center gap-2">
                   {word.text}
                   <Due isDue={isDue(word.fsrsCard.due)} />
                 </TableCell>
@@ -177,7 +164,7 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
             ))}
           </TableBody>
         </Table>
-      </div>
+      </ScrollArea>
 
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
@@ -196,37 +183,20 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={isDeleteAllOpen} onOpenChange={open => { if (!isDeletingAll && !isDeleteConfirming) setIsDeleteAllOpen(open); }}>
+      <AlertDialog open={isDeleteAllOpen} onOpenChange={setIsDeleteAllOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete ALL words?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <strong>{propWords.length}</strong> words from your library. This action cannot be undone.
+              This will permanently remove <strong>{words.length}</strong> words from your library. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {!isDeleteConfirming && !isDeletingAll && (
-              <>
-                <AlertDialogCancel onClick={() => setIsDeleteAllOpen(false)} disabled={isDeletingAll || isDeleteConfirming}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={startDeleteAll} className={buttonVariants({variant: "destructive"})} disabled={isDeletingAll || isDeleteConfirming}>
-                  Delete All Words
-                </AlertDialogAction>
-              </>
-            )}
+            <AlertDialogCancel onClick={() => setIsDeleteAllOpen(false)} disabled={isDeletingAll}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAll} className={buttonVariants({variant: "destructive"})} disabled={isDeletingAll}>
+              {isDeletingAll ? 'Deleting...' : 'Delete All Words'}
+            </AlertDialogAction>
           </AlertDialogFooter>
-          {(isDeleteConfirming || isDeletingAll || deleteProgress > 0) && deleteProgressInfo.total > 0 ? (
-            <div className="w-full mt-4">
-              <div className="w-full bg-muted rounded h-4 overflow-hidden relative">
-                <div
-                  className="bg-red-500 h-4 transition-all duration-300"
-                  style={{ width: `${deleteProgress}%` }}
-                />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-semibold text-white drop-shadow">
-                  {deleteProgress < 100 ? `${deleteProgressInfo.current} / ${deleteProgressInfo.total}` : 'Done'}
-                </div>
-              </div>
-            </div>
-          ) : null}
         </AlertDialogContent>
       </AlertDialog>
     </>

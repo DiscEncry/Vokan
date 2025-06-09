@@ -18,7 +18,6 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
-  startAfter,
   limit,
   getDocs,
   QueryDocumentSnapshot,
@@ -56,10 +55,6 @@ interface VocabularyContextType {
   getDecoyWords: (targetWordId: string, count: number) => Word[];
   isLoading: boolean;
   isSyncing: boolean;
-  // Pagination
-  fetchNextPage: () => Promise<void>;
-  hasMore: boolean;
-  resetPagination: () => void;
 }
 
 const VocabularyContext = createContext<VocabularyContextType | undefined>(undefined);
@@ -72,9 +67,6 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const PAGE_SIZE = 50;
-  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(true);
 
   // Abuse prevention: simple in-memory rate limit for addWord
   const addWordTimestamps = useRef<number[]>([]);
@@ -237,44 +229,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     return generateDecoyWords(words, targetWordId, count);
   }, [words]);
 
-  // Reset pagination (e.g., on user change)
-  const resetPagination = useCallback(() => {
-    setWords([]);
-    setLastVisible(null);
-    setHasMore(true);
-  }, []);
-
-  // Fetch next page of words
-  const fetchNextPage = useCallback(async () => {
-    if (!user || !firestore || !hasMore) return;
-    setIsLoading(true);
-    let q;
-    if (lastVisible) {
-      q = query(
-        collection(firestore, `users/${user.uid}/words`),
-        orderBy('dateAdded', 'desc'),
-        startAfter(lastVisible),
-        limit(PAGE_SIZE)
-      );
-    } else {
-      q = query(
-        collection(firestore, `users/${user.uid}/words`),
-        orderBy('dateAdded', 'desc'),
-        limit(PAGE_SIZE)
-      );
-    }
-    const snap = await getDocs(q);
-    const newWords: Word[] = snap.docs.map(doc => {
-      const data = doc.data() || {};
-      return { id: doc.id, ...data } as Word;
-    });
-    setWords(prev => [...prev, ...newWords]);
-    setLastVisible(snap.docs[snap.docs.length - 1] || lastVisible);
-    setHasMore(newWords.length === PAGE_SIZE);
-    setIsLoading(false);
-  }, [user, firestore, hasMore, lastVisible]);
-
-  // Listen to Firestore for real-time updates to the first page only
+  // Fetch all words on user login
   useEffect(() => {
     if (!user || !firestore) {
       setWords([]);
@@ -282,13 +237,10 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     setIsLoading(true);
-    const q = query(collection(firestore, `users/${user.uid}/words`), orderBy('dateAdded', 'desc'), limit(PAGE_SIZE));
+    const q = query(collection(firestore, `users/${user.uid}/words`), orderBy('dateAdded', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const wordsData: Word[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Word));
-      // Always replace state with Firestore data (no merge)
       setWords(wordsData);
-      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(wordsData.length === PAGE_SIZE);
       setIsLoading(false);
     }, (error) => {
       console.error('[VocabularyContext] Firestore onSnapshot error:', error);
@@ -308,11 +260,7 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     getDecoyWords,
     isLoading,
     isSyncing,
-    fetchNextPage,
-    hasMore,
-    resetPagination,
-    isLocalOnly: false,
-  }), [words, addWord, addWordsBatch, updateWordSRS, deleteWord, getWordById, getDecoyWords, isLoading, isSyncing, fetchNextPage, hasMore, resetPagination]);
+  }), [words, addWord, addWordsBatch, updateWordSRS, deleteWord, getWordById, getDecoyWords, isLoading, isSyncing]);
 
   return (
     <VocabularyContext.Provider value={contextValue}>

@@ -13,6 +13,7 @@ import { showStandardToast } from '@/lib/showStandardToast';
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_WORDS_TO_PROCESS_AT_ONCE = 5000;
 const MAX_WORD_LENGTH_IMPORT = 100;
+const BATCH_SIZE = 200;
 
 interface ImportWordsSectionProps {
   disabled?: boolean;
@@ -21,6 +22,8 @@ interface ImportWordsSectionProps {
 const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progress, setProgress] = useState(0); // Progress state (0-100)
+  const [progressInfo, setProgressInfo] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addWordsBatch, words: libraryWords } = useVocabulary();
   const { toast } = useToast();
@@ -84,6 +87,8 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
       return;
     }
     setIsProcessing(true);
+    setProgress(0);
+    setProgressInfo({ current: 0, total: 0 });
     let wordsToAdd: string[] = [];
     let processedCount = 0;
     let skippedDuplicateCount = 0;
@@ -96,24 +101,39 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
       if (processedCount === 0) {
         showStandardToast(toast, 'error', 'No Valid Words Found', 'The file did not contain any processable words.');
         setIsProcessing(false);
+        setProgress(0);
+        setProgressInfo({ current: 0, total: 0 });
         return;
       }
-
       const existingLibraryTexts = new Set(libraryWords.map(w => w.text.toLowerCase()));
-      
       wordsToAdd = parsedWords.filter(word => {
         const isDuplicate = existingLibraryTexts.has(word.toLowerCase());
         if (isDuplicate) skippedDuplicateCount++;
         return !isDuplicate;
       });
 
-      if (wordsToAdd.length > 0) {
-        const addedCount = await addWordsBatch(wordsToAdd);
-        showStandardToast(toast, 'success', 'Words Imported', `${addedCount} new word(s) added. ${skippedDuplicateCount} word(s) skipped as duplicates. ${processedCount - wordsToAdd.length - skippedDuplicateCount} word(s) were invalid or already duplicates within the file.`);
+      let totalAdded = 0;
+      setProgressInfo({ current: 0, total: wordsToAdd.length });
+      for (let i = 0; i < wordsToAdd.length; i += BATCH_SIZE) {
+        const batch = wordsToAdd.slice(i, i + BATCH_SIZE);
+        totalAdded += await addWordsBatch(batch);
+        const done = Math.min(i + batch.length, wordsToAdd.length);
+        setProgress(Math.round((done / wordsToAdd.length) * 100));
+        setProgressInfo({
+          current: done,
+          total: wordsToAdd.length
+        });
+      }
+      setProgress(100);
+      setProgressInfo({
+        current: wordsToAdd.length,
+        total: wordsToAdd.length
+      });
+      if (totalAdded > 0) {
+        showStandardToast(toast, 'success', 'Words Imported', `${totalAdded} new word(s) added. ${skippedDuplicateCount} word(s) skipped as duplicates. ${processedCount - wordsToAdd.length - skippedDuplicateCount} word(s) were invalid or already duplicates within the file.`);
       } else {
         showStandardToast(toast, 'info', 'No New Words to Add');
       }
-
     } catch (error) {
       console.error('Import error:', error);
       toast({
@@ -124,6 +144,7 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
     } finally {
       setIsProcessing(false);
       setSelectedFile(null);
+      setTimeout(() => { setProgress(0); setProgressInfo({ current: 0, total: 0 }); }, 1200);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -180,6 +201,19 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
             </>
           )}
         </Button>
+        {(isProcessing || progress > 0) && progressInfo.total > 0 ? (
+          <div className="w-full mt-2">
+            <div className="w-full bg-muted rounded h-4 overflow-hidden relative">
+              <div
+                className="bg-green-500 h-4 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-semibold text-white drop-shadow">
+                {progress < 100 ? `${progressInfo.current} / ${progressInfo.total}` : 'Done'}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

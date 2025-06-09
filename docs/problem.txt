@@ -1,0 +1,4 @@
+pagination is implemented to reduce large calls in case user has a large vocabulary list.
+turns out, its not as simple as that, it was incompatitble with my current word search, sort, filter system. not even with my total word count system, causing various errors and glitchs and slow loading.
+to fix all those glitches, we have to implement various fix that will make files become much more heavier.
+so i have another idea, how about sticking to preloading all user's data, together with caching, syncing. filter, sort, search will be client side. because 5000 words will only be 1-2 mb at most.
