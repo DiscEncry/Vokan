@@ -20,11 +20,9 @@ export function AuthDialogProvider({ children }: { children: React.ReactNode }) 
   const openDialog = useCallback((registering = false) => {
     setIsRegistering(registering);
     setOpen(true);
-    console.log('[AuthDialogContext] openDialog called, registering:', registering);
   }, []);
   const closeDialog = useCallback(() => {
     setOpen(false);
-    console.log('[AuthDialogContext] closeDialog called');
   }, []);
 
   const contextValue = React.useMemo(() => ({

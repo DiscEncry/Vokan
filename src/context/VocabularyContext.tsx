@@ -1,7 +1,7 @@
 "use client";
 
 import type { Word, FSRSCard } from '@/types';
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { firestore } from '@/lib/firebase/firebaseConfig';

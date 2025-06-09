@@ -96,7 +96,7 @@ const generateWordDetailsFlow = ai.defineFlow(
     const cacheCollectionName = "wordDetailsCache";
 
     if (!firestore) {
-      console.warn("Firestore not initialized. Skipping cache for word details.");
+      // Firestore not initialized, skipping cache
     } else {
       try {
         const cacheDocRef = doc(firestore, cacheCollectionName, cacheKey);
@@ -105,16 +105,14 @@ const generateWordDetailsFlow = ai.defineFlow(
         if (cacheDocSnap.exists()) {
           const cachedData = cacheDocSnap.data() as CachedWordDetails;
           // Optional: Add logic to check cache freshness based on cachedData.cachedAt if needed
-          console.log(`[AI Cache HIT] Returning cached details for "${input.word}"`);
           return {
             word: cachedData.word, // Use word from cache, which should match input.word
             details: cachedData.details,
           };
         }
-        console.log(`[AI Cache MISS] No cached details for "${input.word}". Fetching from AI.`);
+        // No cached details found, fetching from AI.
       } catch (error) {
-        console.error(`Error reading from Firestore cache for word "${input.word}":`, error);
-        // Proceed to AI if cache read fails
+        // Error reading from Firestore cache, proceed to AI if cache read fails
       }
     }
 
@@ -122,7 +120,6 @@ const generateWordDetailsFlow = ai.defineFlow(
     try {
       llmResponse = await prompt(input);
     } catch (e) {
-      console.error(`[AI Flow Error - generateWordDetails prompt call] Input: ${JSON.stringify(input)}, Error:`, e);
       return {
         word: input.word,
         details: `Unable to retrieve full details for "${input.word}" at this time due to an AI service error.`,
@@ -133,9 +130,6 @@ const generateWordDetailsFlow = ai.defineFlow(
 
     if (!output || !output.details || !output.word) {
       const rawText = llmResponse?.text;
-      console.warn(
-        `[AI Flow Warning - generateWordDetails] AI returned null/undefined or unparseable output. Input: ${JSON.stringify(input)}. Raw LLM Text: ${rawText}. Full LLM Response: ${JSON.stringify(llmResponse)}`
-      );
       return {
         word: input.word,
         details: `Unable to retrieve full details for "${input.word}" at this time. The AI model's response was not in the expected format. (Raw: ${rawText ? String(rawText).substring(0, 100) + '...' : 'N/A'})`,
@@ -153,9 +147,7 @@ const generateWordDetailsFlow = ai.defineFlow(
           cachedAt: serverTimestamp() as Timestamp, // Firestore server timestamp
         };
         await setDoc(cacheDocRef, dataToCache);
-        console.log(`[AI Cache WRITE] Successfully cached details for "${input.word}"`);
       } catch (error) {
-        console.error(`Error writing to Firestore cache for word "${input.word}":`, error);
         // Don't let cache write failure prevent returning the details
       }
     }

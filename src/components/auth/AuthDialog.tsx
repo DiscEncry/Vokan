@@ -31,8 +31,6 @@ export default function AuthDialog() {
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
-  console.log('[AuthDialog] rendered, open:', open, 'isRegistering:', isRegistering);
-
   // Block UI if not authenticated or no profile
   const shouldBlock = !profile && !profileLoading;
 

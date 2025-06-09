@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useReducer, useMemo, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useReducer, useMemo, ReactNode, useCallback } from 'react';
 import {
   GoogleAuthProvider,
   User,

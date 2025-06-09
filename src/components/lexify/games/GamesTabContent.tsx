@@ -1,7 +1,7 @@
 "use client";
 
 import type { FC } from 'react';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import ClozeGame from './ClozeGame';
 import TextInputGame from './TextInputGame'; // Import the new game component
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';

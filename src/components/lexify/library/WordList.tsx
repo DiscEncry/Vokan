@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState, useCallback, useRef, type FC } from 'react';
+import { memo, useState, useCallback, useRef, type FC } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Word } from '@/types';
 import { Trash2 } from 'lucide-react';

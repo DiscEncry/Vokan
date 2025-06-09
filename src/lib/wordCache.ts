@@ -18,10 +18,8 @@ const getDb = (): Promise<IDBPDatabase<LexifyDB>> => {
   if (!dbPromise) {
     dbPromise = openDB<LexifyDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion, newVersion, transaction) {
-        console.log(`[wordCache] Upgrading IndexedDB from version ${oldVersion} to ${newVersion}`);
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME);
-          console.log(`[wordCache] Object store "${STORE_NAME}" created.`);
         }
       },
       blocked() {
@@ -48,7 +46,6 @@ export const wordCache = {
     try {
       const db = await getDb();
       await db.put(STORE_NAME, words, letter.toLowerCase());
-      console.log(`[wordCache] Saved chunk for letter "${letter}" to IndexedDB.`);
     } catch (error) {
       console.error(`[wordCache] Error saving chunk for letter "${letter}" to IndexedDB:`, error);
       // Optionally, handle specific errors or re-throw
@@ -60,9 +57,7 @@ export const wordCache = {
       const db = await getDb();
       const chunk = await db.get(STORE_NAME, letter.toLowerCase());
       if (chunk) {
-        console.log(`[wordCache] Retrieved chunk for letter "${letter}" from IndexedDB.`);
       } else {
-        console.log(`[wordCache] No chunk found for letter "${letter}" in IndexedDB.`);
       }
       return chunk;
     } catch (error) {
@@ -75,7 +70,6 @@ export const wordCache = {
     try {
       const db = await getDb();
       await db.clear(STORE_NAME);
-      console.log('[wordCache] Cleared all word chunks from IndexedDB.');
     } catch (error) {
       console.error('[wordCache] Error clearing IndexedDB:', error);
     }

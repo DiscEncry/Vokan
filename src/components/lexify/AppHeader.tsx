@@ -34,15 +34,12 @@ export function AppHeader() {
     >
       <div className="flex items-center w-full sm:w-auto">
         <h1 className="text-2xl font-bold mr-2" tabIndex={0} aria-label="Lexify Home">Lexify</h1>
-        {isSyncing && (
-          <div className="flex items-center text-base font-bold text-primary bg-primary/10 px-3 py-1 rounded-lg ml-4 animate-pulse shadow border border-primary gap-2" aria-live="polite" aria-label="Syncing">
-            <Loader2 className="h-5 w-5 mr-2 animate-spin text-primary" aria-hidden="true" />
-            <span>Syncing...</span>
-          </div>
-        )}
         {user && (
-          <span className="text-xs bg-green-200 dark:bg-green-900 px-2 py-0.5 rounded-full ml-2 text-green-900 dark:text-green-200" aria-label="Cloud Sync enabled">
+          <span className="text-xs bg-green-200 dark:bg-green-900 px-2 py-0.5 rounded-full ml-2 text-green-900 dark:text-green-200 flex items-center gap-1" aria-label="Cloud Sync enabled">
             Cloud Sync
+            {isSyncing && (
+              <span className="ml-1 inline-block w-2 h-2 rounded-full bg-primary animate-pulse" title="Syncing" />
+            )}
           </span>
         )}
       </div>
