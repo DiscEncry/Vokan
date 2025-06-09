@@ -16,7 +16,7 @@ import { useWordGameCore } from './useWordGameCore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isDue, logQuizResult } from '@/lib/utils';
 import WordDetailPanel from './WordDetailPanel';
-import { Due } from '@/components/lexify/library/Due';
+import { Due } from '@/components/vokan/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
 import { useWordGameAnswerState } from './useWordGameAnswerState';
 import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';

@@ -1,16 +1,16 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AppHeader } from "@/components/lexify/AppHeader";
-import LibraryTabContent from "@/components/lexify/library/LibraryTabContent"; // Changed to default import
+import { AppHeader } from "@/components/vokan/AppHeader";
+import LibraryTabContent from "@/components/vokan/library/LibraryTabContent"; // Changed to default import
 import dynamic from "next/dynamic";
 
 const GamesTabContent = dynamic(
-  () => import("@/components/lexify/games/GamesTabContent"),
+  () => import("@/components/vokan/games/GamesTabContent"),
   { ssr: false }
 );
 const InsightsTabContent = dynamic(
-  () => import("@/components/lexify/insights/InsightsTabContent"),
+  () => import("@/components/vokan/insights/InsightsTabContent"),
   { ssr: false }
 );
 

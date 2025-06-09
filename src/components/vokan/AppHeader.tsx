@@ -4,7 +4,7 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useVocabulary } from "@/context/VocabularyContext";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
-import GuideDialog from "@/components/lexify/library/GuideDialog";
+import GuideDialog from "@/components/vokan/library/GuideDialog";
 import { Button } from "@/components/ui/button";
 import { useAuthDialog } from "@/context/AuthDialogContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -33,7 +33,7 @@ export function AppHeader() {
       aria-label="App header"
     >
       <div className="flex items-center w-full sm:w-auto">
-        <h1 className="text-2xl font-bold mr-2" tabIndex={0} aria-label="Lexify Home">Lexify</h1>
+        <h1 className="text-2xl font-bold mr-2" tabIndex={0} aria-label="Vokan Home">Vokan</h1>
         {user && (
           <span className="text-xs bg-green-200 dark:bg-green-900 px-2 py-0.5 rounded-full ml-2 text-green-900 dark:text-green-200 flex items-center gap-1" aria-label="Cloud Sync enabled">
             Cloud Sync

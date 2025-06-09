@@ -18,7 +18,7 @@ import FamiliarityDot from './FamiliarityDot';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isDue, logQuizResult } from '@/lib/utils';
 import { useWordGameCore } from './useWordGameCore';
-import { Due } from '@/components/lexify/library/Due';
+import { Due } from '@/components/vokan/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
 import { useWordGameAnswerState } from './useWordGameAnswerState';
 import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';

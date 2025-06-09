@@ -21,7 +21,7 @@ const fontSans = FontSans({
 });
 
 export const metadata: Metadata = {
-  title: 'Lexify - Vocabulary Learning',
+  title: 'Vokan - Vocabulary Learning',
   description: 'AI-powered vocabulary learning app',
 };
 

@@ -1,22 +1,22 @@
 // src/lib/wordCache.ts
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
-const DB_NAME = 'lexify-dictionary-cache';
+const DB_NAME = 'vokan-dictionary-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'wordChunks';
 
-interface LexifyDB extends DBSchema {
+interface VokanDB extends DBSchema {
   [STORE_NAME]: {
     key: string; // The letter (e.g., 'a', 'b')
     value: string[]; // Array of words for that letter
   };
 }
 
-let dbPromise: Promise<IDBPDatabase<LexifyDB>> | null = null;
+let dbPromise: Promise<IDBPDatabase<VokanDB>> | null = null;
 
-const getDb = (): Promise<IDBPDatabase<LexifyDB>> => {
+const getDb = (): Promise<IDBPDatabase<VokanDB>> => {
   if (!dbPromise) {
-    dbPromise = openDB<LexifyDB>(DB_NAME, DB_VERSION, {
+    dbPromise = openDB<VokanDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion, newVersion, transaction) {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME);

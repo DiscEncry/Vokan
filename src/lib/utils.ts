@@ -29,7 +29,7 @@ export function logQuizResult(
     timestamp: number;
   }
 ) {
-  const QUIZ_LOG_KEY = "lexify-quiz-log-v1";
+  const QUIZ_LOG_KEY = "vokan-quiz-log-v1";
   try {
     const prev = JSON.parse(localStorage.getItem(QUIZ_LOG_KEY) || "[]");
     prev.push(result);
@@ -47,7 +47,7 @@ export type QuizLogEntry = {
 };
 
 export function getQuizLog(): QuizLogEntry[] {
-  const QUIZ_LOG_KEY = "lexify-quiz-log-v1";
+  const QUIZ_LOG_KEY = "vokan-quiz-log-v1";
   try {
     return JSON.parse(localStorage.getItem(QUIZ_LOG_KEY) || "[]");
   } catch {

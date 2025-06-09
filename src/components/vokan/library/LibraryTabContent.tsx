@@ -94,14 +94,14 @@ const LibraryTabContent = () => {
     ].join(','));
     const csvContent = [header, ...rows].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    saveAs(blob, `lexify-vocabulary-${new Date().toISOString().slice(0,10)}.csv`);
+    saveAs(blob, `vokan-vocabulary-${new Date().toISOString().slice(0,10)}.csv`);
   }, [words]);
 
   // Export as JSON
   const handleExportJSON = useCallback(() => {
     if (!words.length) return;
     const blob = new Blob([JSON.stringify(words, null, 2)], { type: 'application/json' });
-    saveAs(blob, `lexify-vocabulary-${new Date().toISOString().slice(0,10)}.json`);
+    saveAs(blob, `vokan-vocabulary-${new Date().toISOString().slice(0,10)}.json`);
   }, [words]);
 
   // Export as TXT (words only)
@@ -109,7 +109,7 @@ const LibraryTabContent = () => {
     if (!words.length) return;
     const txt = words.map(w => w.text).join('\r\n');
     const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, `lexify-words-${new Date().toISOString().slice(0,10)}.txt`);
+    saveAs(blob, `vokan-words-${new Date().toISOString().slice(0,10)}.txt`);
   }, [words]);
 
   return (
