@@ -130,18 +130,15 @@ export default function SetPasswordForm({
     }
   };
 
+  // Only show main form error if it's not a password length/strength or password mismatch error
+  const isFieldLevelError =
+    validationState.message === "Your password must be at least 8 characters long." ||
+    validationState.message === "Please choose a stronger password. Use a mix of uppercase, lowercase, numbers, and symbols until the strength meter is green." ||
+    validationState.message === "The passwords you entered do not match. Please re-enter your password to confirm.";
+  const showMainError = touched.password && touched.confirmPassword && validationState.message && !isFieldLevelError;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          value={email}
-          disabled
-          className="bg-muted"
-        />
-      </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <div className="relative">
@@ -156,26 +153,23 @@ export default function SetPasswordForm({
             className="pr-10"
             autoComplete="new-password"
           />
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-8 top-1/2 -translate-y-1/2"
+            tabIndex={-1}
+            className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 bg-transparent border-none p-0"
             onClick={() => updateFormState({ showPassword: !formState.showPassword })}
+            aria-label={formState.showPassword ? "Hide password" : "Show password"}
             disabled={loading}
           >
-            {formState.showPassword ? (
-              <EyeOffIcon className="h-4 w-4" />
-            ) : (
-              <EyeIcon className="h-4 w-4" />
-            )}
-          </Button>
+            {formState.showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+          </button>
           {passwordValid && touched.password && (
             <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
         <PasswordStrengthMeter strength={strength} password={formState.password} />
-        {!passwordValid && passwordError && <div className="text-xs text-red-500 mt-1">{passwordError}</div>}
+        {/* Only show password error after user has typed */}
+        {!passwordValid && passwordError && touched.password && <div className="text-xs text-red-500 mt-1">{passwordError}</div>}
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -191,27 +185,25 @@ export default function SetPasswordForm({
             className="pr-10"
             autoComplete="new-password"
           />
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-8 top-1/2 -translate-y-1/2"
+            tabIndex={-1}
+            className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 bg-transparent border-none p-0"
             onClick={() => updateFormState({ showConfirmPassword: !formState.showConfirmPassword })}
+            aria-label={formState.showConfirmPassword ? "Hide password" : "Show password"}
             disabled={loading}
           >
-            {formState.showConfirmPassword ? (
-              <EyeOffIcon className="h-4 w-4" />
-            ) : (
-              <EyeIcon className="h-4 w-4" />
-            )}
-          </Button>
+            {formState.showConfirmPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+          </button>
           {confirmValid && touched.confirmPassword && (
             <CheckCircle className="w-5 h-5 text-green-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}
         </div>
-        {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}
+        {/* Only show confirm error after user has typed */}
+        {!confirmValid && confirmError && touched.confirmPassword && <div className="text-xs text-red-500 mt-1">{confirmError}</div>}
       </div>
-      <FormStatusMessage message={validationState.message} type="error" />
+      {/* Only show main form error after both fields have been touched */}
+      {showMainError && <FormStatusMessage message={validationState.message} type="error" />}
       <FormStatusMessage message={error} type="error" />
       <div className="space-y-2">
         <Button
@@ -219,11 +211,7 @@ export default function SetPasswordForm({
           className="w-full"
           disabled={loading || !validationState.isValid}
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Set Password"
-          )}
+          {loading ? <Loader2 className="animate-spin mr-2" /> : null}Set Password
         </Button>
       </div>
     </form>

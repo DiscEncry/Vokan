@@ -7,11 +7,13 @@ import AccountDeletionForm from '@/components/auth/AccountDeletionForm';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/context/AuthContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Mail, Lock, Trash2, User, Shield, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import DevDeleteAllAccountsButton from '@/components/auth/DevDeleteAllAccountsButton';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -46,13 +48,26 @@ export default function SettingsPage() {
 
   if (!user) {
     return (
-      <div className="container max-w-6xl mx-auto p-6">
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
-          <div className="text-lg font-semibold mb-2">You must be signed in to view your settings.</div>
-          {/* Dev-only: allow deleting all accounts even if not signed in */}
-          <div className="mt-8">
-            <DevDeleteAllAccountsButton />
-          </div>
+      <div className="min-h-screen bg-background">
+        <div className="container max-w-4xl mx-auto p-6">
+          <Card className="border-0 shadow-lg">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Settings className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-xl mb-2">Authentication Required</CardTitle>
+              <CardDescription className="mb-6 max-w-md">
+                You must be signed in to access your account settings and preferences.
+              </CardDescription>
+              <Button onClick={() => router.push('/auth')} className="mb-8">
+                Sign In
+              </Button>
+              {/* Dev-only: allow deleting all accounts even if not signed in */}
+              <div className="pt-8 border-t">
+                <DevDeleteAllAccountsButton />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -60,89 +75,238 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="container max-w-6xl mx-auto p-6">
-        <div className="flex flex-col space-y-4 mb-8 animate-pulse">
-          <div className="h-8 w-48 bg-muted rounded"></div>
-          <div className="h-4 w-96 bg-muted rounded"></div>
+      <div className="min-h-screen bg-background">
+        <div className="container max-w-4xl mx-auto p-6">
+          {/* Header skeleton */}
+          <div className="mb-8">
+            <div className="h-6 w-20 bg-muted rounded animate-pulse mb-6"></div>
+            <div className="h-8 w-64 bg-muted rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-96 bg-muted rounded animate-pulse"></div>
+          </div>
+          
+          {/* Content skeleton */}
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="border-0 shadow-lg">
+                <CardHeader>
+                  <div className="h-6 w-48 bg-muted rounded animate-pulse mb-2"></div>
+                  <div className="h-4 w-72 bg-muted rounded animate-pulse"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-24 bg-muted rounded animate-pulse"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-        {/* Removed the second loading spinner and message */}
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="container max-w-6xl mx-auto p-6">
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
-          <div className="text-lg font-semibold mb-2">Unable to load profile. Please try again.</div>
+      <div className="min-h-screen bg-background">
+        <div className="container max-w-4xl mx-auto p-6">
+          <Card className="border-0 shadow-lg">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                <Settings className="h-8 w-8 text-destructive" />
+              </div>
+              <CardTitle className="text-xl mb-2">Unable to Load Profile</CardTitle>
+              <CardDescription className="mb-6">
+                There was an issue loading your profile. Please try refreshing the page.
+              </CardDescription>
+              <Button onClick={() => window.location.reload()} variant="outline">
+                Refresh Page
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
   }
+
   return (
-    <div className="container max-w-6xl mx-auto p-6">
-      <div className="mb-4">
-        <Button type="button" variant="outline" onClick={() => router.push('/')}>Go Home</Button>
-      </div>
-      <div className="flex flex-col space-y-4 mb-8">
-        <h1 className="text-3xl font-bold">Account Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account information and security
-        </p>
-      </div>
-      <div className="mb-8">
-        <ProfileForm initialProfile={profile} />
-      </div>
-      <div className="space-y-8">
-        {/* Email Change */}
-        <div className="bg-card rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-2">Change Email</h2>
-          <p className="text-sm text-muted-foreground mb-2">To change your email, you must re-enter your password for security.</p>
-          {/* TODO: Implement ChangeEmailForm with re-authentication */}
-          <button className="btn btn-outline" onClick={() => setShowEmailForm(!showEmailForm)}>
-            {showEmailForm ? 'Cancel' : 'Change Email'}
-          </button>
-          {showEmailForm && (
-            <div className="mt-4">
-              {/* Placeholder for ChangeEmailForm */}
-              <p className="text-xs text-muted-foreground">(Feature coming soon)</p>
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-4xl mx-auto p-6 space-y-8">
+        {/* Header */}
+        <div className="space-y-6">
+          <Button 
+            variant="ghost" 
+            onClick={() => router.push('/')}
+            className="p-2 hover:bg-muted rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+          
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
+            <p className="text-muted-foreground text-lg">
+              Manage your account information, security, and preferences
+            </p>
+          </div>
+        </div>
+
+        {/* Profile Section */}
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Profile Information</CardTitle>
+                <CardDescription>
+                  Update your personal details and display preferences
+                </CardDescription>
+              </div>
             </div>
-          )}
-        </div>
-        {/* Password Change */}
-        <div className="bg-card rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-2">Change Password</h2>
-          <button className="btn btn-outline" onClick={() => setShowPasswordForm(!showPasswordForm)}>
-            {showPasswordForm ? 'Cancel' : 'Change Password'}
-          </button>
-          {showPasswordForm && (
-            <div className="mt-4">
-              <SetPasswordForm
-                email={profile.email}
-                onSubmitAction={async (password) => {
-                  // Import updatePassword dynamically to avoid SSR issues
-                  const { updatePassword } = await import("@/lib/firebase/updatePassword");
-                  try {
-                    await updatePassword(password);
-                    setShowPasswordForm(false);
-                  } catch (err: any) {
-                    // Optionally: show error to user (could be improved with state)
-                    alert(err.message || "Failed to update password. Please re-authenticate and try again.");
-                  }
-                }}
-              />
+          </CardHeader>
+          <CardContent>
+            <ProfileForm initialProfile={profile} />
+          </CardContent>
+        </Card>
+
+        {/* Security Section */}
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Security & Authentication</CardTitle>
+                <CardDescription>
+                  Manage your account security and authentication methods
+                </CardDescription>
+              </div>
             </div>
-          )}
-        </div>
-        {/* Delete Account */}
-        <div className="bg-card rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-2 text-red-600">Delete Account</h2>
-          <AccountDeletionForm />
-        </div>
-      </div>
-      {/* Dev-only: Danger zone for deleting all accounts */}
-      <div className="mt-8">
-        <DevDeleteAllAccountsButton />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Email Change Section */}
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center mt-1">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div>
+                    <h3 className="font-medium">Email Address</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Change your account email address. You'll need to re-enter your password for security.
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowEmailForm(!showEmailForm)}
+                    className="mt-2"
+                  >
+                    {showEmailForm ? 'Cancel' : 'Change Email'}
+                  </Button>
+                  {showEmailForm && (
+                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-dashed">
+                      <p className="text-sm text-muted-foreground italic">
+                        Feature coming soon
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* Password Change Section */}
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center mt-1">
+                  <Lock className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div>
+                    <h3 className="font-medium">Password</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Update your account password to keep your account secure.
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowPasswordForm(!showPasswordForm)}
+                    className="mt-2"
+                  >
+                    {showPasswordForm ? 'Cancel' : 'Change Password'}
+                  </Button>
+                  {showPasswordForm && (
+                    <div className="mt-4 p-4 bg-background border rounded-lg">
+                      <SetPasswordForm
+                        email={profile.email}
+                        onSubmitAction={async (password) => {
+                          // Import updatePassword dynamically to avoid SSR issues
+                          const { updatePassword } = await import("@/lib/firebase/updatePassword");
+                          try {
+                            await updatePassword(password);
+                            setShowPasswordForm(false);
+                            toast({
+                              title: "Password updated",
+                              description: "Your password has been successfully changed.",
+                            });
+                          } catch (err: any) {
+                            toast({
+                              title: "Error",
+                              description: err.message || "Failed to update password. Please re-authenticate and try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card className="border-0 shadow-lg border-l-4 border-l-destructive">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-destructive">Danger Zone</CardTitle>
+                <CardDescription>
+                  Permanently delete your account and all data. This action cannot be undone.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <AccountDeletionForm />
+          </CardContent>
+        </Card>
+
+        {/* Dev Controls */}
+        <Card className="border-0 shadow-lg border-l-4 border-l-orange-500">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <Settings className="h-5 w-5 text-orange-500" />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-orange-600">Developer Tools</CardTitle>
+                <CardDescription>
+                  Development and testing utilities (not visible in production)
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <DevDeleteAllAccountsButton />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useTheme as useNextTheme } from 'next-themes';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -17,10 +18,13 @@ export const useThemeContext = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const { setTheme: setNextTheme } = useNextTheme();
+  const { preferences, updatePreference } = useUserPreferences();
 
-  // Remove user preferences logic for theme, only use next-themes
   const handleSetTheme = (newTheme: ThemeMode) => {
     setNextTheme(newTheme);
+    if (preferences.darkMode !== newTheme) {
+      updatePreference('darkMode', newTheme).catch(console.error);
+    }
   };
 
   return (
