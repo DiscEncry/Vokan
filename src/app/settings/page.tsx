@@ -24,20 +24,24 @@ export default function SettingsPage() {
   const [updatingPrefs, setUpdatingPrefs] = useState<{ [key: string]: boolean }>({});
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [didInitTheme, setDidInitTheme] = useState(false);
 
   const loading = profileLoading || prefsLoading;
 
   useEffect(() => {
-    if (!loading && preferences.darkMode && theme !== preferences.darkMode) {
+    if (!loading && preferences.darkMode && preferences.darkMode !== 'system' && theme !== preferences.darkMode) {
       setTheme(preferences.darkMode);
+      setDidInitTheme(true);
+    } else if (!loading && preferences.darkMode === 'system') {
+      setDidInitTheme(true);
     }
   }, [preferences.darkMode, loading]);
 
   useEffect(() => {
-    if (!loading && theme && preferences.darkMode !== theme) {
+    if (!loading && didInitTheme && theme && preferences.darkMode !== theme && preferences.darkMode !== 'system') {
       updatePreference('darkMode', theme as 'light' | 'dark' | 'system').catch(console.error);
     }
-  }, [theme, loading]);
+  }, [theme, loading, didInitTheme]);
 
   const handlePreferenceChange = async (key: keyof typeof preferences, value: any) => {
     setUpdatingPrefs(prev => ({ ...prev, [key]: true }));

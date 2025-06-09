@@ -4,7 +4,7 @@ import { memo, useMemo, type FC, useEffect, useState } from 'react';
 import { useVocabulary } from '@/context/VocabularyContext';
 import StatsCard from './StatsCard';
 import StageDistributionDonutChart from './FamiliarityPieChart';
-import { BookOpen, BarChartBig, Brain, AlertTriangle } from 'lucide-react';
+import { BookOpen, BarChartBig, Brain, AlertTriangle, TrendingUp, CalendarDays, BarChart3 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -24,11 +24,32 @@ function getSessionStats(words: any[]) {
 }
 
 function getMasteryForecast(words: any[]) {
-  // Example: return dummy forecast values
+  // Calculate average mastered per day (last 7 days)
+  const today = new Date();
+  let masteredByDay: Record<string, number> = {};
+  words.forEach(w => {
+    if (w.fsrsCard?.state === 'Review' && w.fsrsCard?.last_review) {
+      const d = w.fsrsCard.last_review.slice(0, 10);
+      masteredByDay[d] = (masteredByDay[d] || 0) + 1;
+    }
+  });
+  let masteredLast7 = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    masteredLast7 += masteredByDay[key] || 0;
+  }
+  const avgLeveledUp = masteredLast7 / 7;
+  const notMastered = words.filter(w => w.fsrsCard?.state !== 'Review').length;
+  let estDaysToMastery = null;
+  if (avgLeveledUp > 0) {
+    estDaysToMastery = Math.ceil(notMastered / avgLeveledUp);
+  }
   return {
-    estDaysToMastery: null,
-    avgLeveledUp: 0,
-    notMastered: words.length,
+    estDaysToMastery,
+    avgLeveledUp,
+    notMastered,
   };
 }
 
@@ -136,9 +157,8 @@ const CalendarHeatmap: FC = () => {
   }
   return (
     <div>
-      <div className="flex items-center gap-4 mb-2">
-        <span className="font-semibold">Study Streaks</span>
-        <span className="text-xs text-muted-foreground">Current streak: <b>{streak}</b> days &nbsp;|&nbsp; Max streak: <b>{maxStreak}</b> days</span>
+      <div className="text-xs text-muted-foreground mb-2">
+        Current streak: <b>{streak}</b> days &nbsp;|&nbsp; Max streak: <b>{maxStreak}</b> days
       </div>
       <div className="overflow-x-auto">
         <svg width={weeks.length * 14} height={7 * 14}>
@@ -267,7 +287,10 @@ const InsightsTabContent: FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Mastered Words Over Time Chart */}
         <div className="bg-background rounded-lg border p-4 shadow-md col-span-2">
-          <div className="font-semibold mb-2">Total Mastered Words Over Time</div>
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 className="h-5 w-5 text-green-500" />
+            <span className="text-lg font-semibold">Total Mastered Words Over Time</span>
+          </div>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={useMemo(() => {
               // Build a time series of total mastered words by day
@@ -284,19 +307,35 @@ const InsightsTabContent: FC = () => {
               let cumulative = 0;
               const data = allDays.map(date => {
                 cumulative += byDay[date];
-                return { date: date.slice(5), mastered: cumulative };
+                return { date, mastered: cumulative };
               });
-              // Fill in missing days (for last 30 days)
+              // Determine the range: from first mastered word or last 30 days
               const today = new Date();
-              const days: { date: string; mastered: number }[] = [];
+              const firstDay = allDays.length > 0 ? new Date(allDays[0]) : today;
+              const daysBetween = Math.floor((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
+              let days: { date: string; mastered: number }[] = [];
               let lastValue = 0;
-              for (let i = 29; i >= 0; i--) {
-                const d = new Date(today);
-                d.setDate(today.getDate() - i);
-                const key = d.toISOString().slice(0, 10);
-                const found = data.find(x => x.date === key.slice(5));
-                if (found) lastValue = found.mastered;
-                days.push({ date: key.slice(5), mastered: lastValue });
+              let startIdx = 0;
+              if (daysBetween < 30) {
+                // Show from first mastered word date to today
+                for (let i = daysBetween; i >= 0; i--) {
+                  const d = new Date(today);
+                  d.setDate(today.getDate() - i);
+                  const key = d.toISOString().slice(0, 10);
+                  const found = data.find(x => x.date === key);
+                  if (found) lastValue = found.mastered;
+                  days.push({ date: key.slice(5), mastered: lastValue });
+                }
+              } else {
+                // Show only last 30 days
+                for (let i = 29; i >= 0; i--) {
+                  const d = new Date(today);
+                  d.setDate(today.getDate() - i);
+                  const key = d.toISOString().slice(0, 10);
+                  const found = data.find(x => x.date === key);
+                  if (found) lastValue = found.mastered;
+                  days.push({ date: key.slice(5), mastered: lastValue });
+                }
               }
               return days;
             }, [words])} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -311,28 +350,36 @@ const InsightsTabContent: FC = () => {
         </div>
       </div>
       <div className="rounded-lg border bg-background p-4 shadow-md">
+        <div className="flex items-center gap-2 mb-2">
+          <CalendarDays className="h-5 w-5 text-orange-400" />
+          <span className="text-lg font-semibold">Study Streaks</span>
+        </div>
         <CalendarHeatmap />
       </div>
       {/* Mastery Forecast Section */}
       <div className="rounded-lg border bg-background p-4 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <div>
-            <div className="text-lg font-semibold mb-1">Mastery Forecast</div>
-            <div className="text-muted-foreground text-sm mb-2">
+          <div className="w-full">
+            <div className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-pink-500" />
+              <span>Mastery Forecast</span>
+            </div>
+            <div className="text-muted-foreground text-sm mb-4">
               Time-to-mastery estimator predicts how long it will take to master your current word set at your current pace.
             </div>
-            <div className="flex flex-wrap gap-4">
-              <div>
-                <span className="font-medium">Estimated days to mastery: </span>
-                <span className="font-mono">{masteryForecast.estDaysToMastery !== null ? masteryForecast.estDaysToMastery : '∞'}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg p-4 flex flex-col items-center shadow-sm bg-green-50 dark:bg-green-900/30">
+                <span className="text-xs text-muted-foreground mb-1 flex items-center gap-1">Estimated days to mastery</span>
+                <span className="text-2xl font-bold text-green-600 dark:text-green-300">{masteryForecast.estDaysToMastery !== null ? masteryForecast.estDaysToMastery : '∞'}</span>
               </div>
-              <div>
-                <span className="font-medium">Current learning speed: </span>
-                <span className="font-mono">{masteryForecast.avgLeveledUp.toFixed(2)}</span> words/day
+              <div className="rounded-lg p-4 flex flex-col items-center shadow-sm bg-blue-50 dark:bg-blue-900/30">
+                <span className="text-xs text-muted-foreground mb-1 flex items-center gap-1">Current learning speed</span>
+                <span className="text-2xl font-bold text-blue-600 dark:text-blue-300">{masteryForecast.avgLeveledUp.toFixed(2)}</span>
+                <span className="text-xs text-muted-foreground">words/day</span>
               </div>
-              <div>
-                <span className="font-medium">Words not yet mastered: </span>
-                <span className="font-mono">{masteryForecast.notMastered}</span>
+              <div className="rounded-lg p-4 flex flex-col items-center shadow-sm bg-yellow-50 dark:bg-yellow-900/30">
+                <span className="text-xs text-muted-foreground mb-1 flex items-center gap-1">Words not yet mastered</span>
+                <span className="text-2xl font-bold text-yellow-600 dark:text-yellow-300">{masteryForecast.notMastered}</span>
               </div>
             </div>
           </div>
