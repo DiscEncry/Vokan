@@ -48,10 +48,10 @@ const GamesTabContent: FC = () => {
         {/* Games Grid */}
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Multiple Choice Game */}
-          <Card className="group relative overflow-hidden border border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 flex flex-col h-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <Card className="group relative overflow-hidden border border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/30 flex flex-col h-full">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent opacity-0 group-hover:opacity-100" />
             <CardHeader className="relative z-10 pb-4">
-              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-4 mx-auto group-hover:bg-primary/15 transition-colors duration-300">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-4 mx-auto group-hover:bg-primary/15">
                 <ListChecks className="h-8 w-8 text-primary" />
               </div>
               <CardTitle className="text-2xl font-semibold text-center mb-2">
@@ -89,20 +89,20 @@ const GamesTabContent: FC = () => {
               <Button 
                 size="lg" 
                 onClick={() => handleStartGame('multipleChoice')}
-                className="w-full group/btn bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 transition-all duration-200 hover:shadow-md"
+                className="w-full group/btn bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 hover:shadow-md"
               >
-                <PlayCircle className="mr-2 h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                <PlayCircle className="mr-2 h-5 w-5 group-hover/btn:scale-110" />
                 Start Game
-                <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform duration-200" />
+                <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1" />
               </Button>
             </CardFooter>
           </Card>
 
           {/* Text Input Game */}
-          <Card className="group relative overflow-hidden border border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 flex flex-col h-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <Card className="group relative overflow-hidden border border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/30 flex flex-col h-full">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent opacity-0 group-hover:opacity-100" />
             <CardHeader className="relative z-10 pb-4">
-              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-4 mx-auto group-hover:bg-primary/15 transition-colors duration-300">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-4 mx-auto group-hover:bg-primary/15">
                 <Edit3 className="h-8 w-8 text-primary" />
               </div>
               <CardTitle className="text-2xl font-semibold text-center mb-2">
@@ -140,11 +140,11 @@ const GamesTabContent: FC = () => {
               <Button 
                 size="lg" 
                 onClick={() => handleStartGame('textInput')}
-                className="w-full group/btn bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 transition-all duration-200 hover:shadow-md"
+                className="w-full group/btn bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 hover:shadow-md"
               >
-                <PlayCircle className="mr-2 h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                <PlayCircle className="mr-2 h-5 w-5 group-hover/btn:scale-110" />
                 Start Challenge
-                <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform duration-200" />
+                <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1" />
               </Button>
             </CardFooter>
           </Card>

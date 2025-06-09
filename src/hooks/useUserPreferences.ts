@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, getFirestore, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';

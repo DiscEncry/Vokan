@@ -12,6 +12,7 @@ import AppShell from '@/components/ui/AppShell';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthDialogProvider } from "@/context/AuthDialogContext";
 import AuthDialog from "@/components/auth/AuthDialog";
+import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 
 // Use Inter as the default sans-serif font
 const fontSans = FontSans({ 
@@ -35,16 +36,20 @@ export default function RootLayout({
         'min-h-screen bg-background font-sans antialiased',
         fontSans.variable
       )}>
-        <TooltipProvider>
-          <AuthDialogProvider>
-            <AuthProvider>
-              <AuthDialog />
-              <AppShell>
-                {children}
-              </AppShell>
-            </AuthProvider>
-          </AuthDialogProvider>
-        </TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <TooltipProvider>
+            <AuthDialogProvider>
+              <AuthProvider>
+                <CustomThemeProvider>
+                  <AuthDialog />
+                  <AppShell>
+                    {children}
+                  </AppShell>
+                </CustomThemeProvider>
+              </AuthProvider>
+            </AuthDialogProvider>
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

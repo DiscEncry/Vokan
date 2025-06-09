@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useState, useRef } from 'react';
 import ProfileForm from '@/components/auth/ProfileForm';
 import SetPasswordForm from '@/components/auth/SetPasswordForm';
 import AccountDeletionForm from '@/components/auth/AccountDeletionForm';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/context/AuthContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
-import { useTheme } from 'next-themes';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import DevDeleteAllAccountsButton from '@/components/auth/DevDeleteAllAccountsButton';
@@ -19,29 +18,12 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
   const { preferences, loading: prefsLoading, error: prefsError, updatePreference } = useUserPreferences();
-  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [updatingPrefs, setUpdatingPrefs] = useState<{ [key: string]: boolean }>({});
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
-  const [didInitTheme, setDidInitTheme] = useState(false);
 
   const loading = profileLoading || prefsLoading;
-
-  useEffect(() => {
-    if (!loading && preferences.darkMode && preferences.darkMode !== 'system' && theme !== preferences.darkMode) {
-      setTheme(preferences.darkMode);
-      setDidInitTheme(true);
-    } else if (!loading && preferences.darkMode === 'system') {
-      setDidInitTheme(true);
-    }
-  }, [preferences.darkMode, loading]);
-
-  useEffect(() => {
-    if (!loading && didInitTheme && theme && preferences.darkMode !== theme && preferences.darkMode !== 'system') {
-      updatePreference('darkMode', theme as 'light' | 'dark' | 'system').catch(console.error);
-    }
-  }, [theme, loading, didInitTheme]);
 
   const handlePreferenceChange = async (key: keyof typeof preferences, value: any) => {
     setUpdatingPrefs(prev => ({ ...prev, [key]: true }));

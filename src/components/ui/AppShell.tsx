@@ -14,12 +14,7 @@ import ClientRoot from "@/components/ui/ClientRoot";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <>
       <GoogleAnalytics />
       <AuthProvider>
         <VocabularyProvider>
@@ -30,6 +25,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Toaster />
         </VocabularyProvider>
       </AuthProvider>
-    </ThemeProvider>
+    </>
   );
 }
