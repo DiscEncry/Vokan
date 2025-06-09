@@ -1,13 +1,12 @@
 "use client";
 
-import React, { memo, useState, useCallback, type FC, useEffect } from 'react';
+import React, { memo, useState, useCallback, useRef, type FC } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import type { Word } from '@/types';
-import { Sparkles, Flame, ThumbsUp, BadgeCheck, HelpCircle, Trash2, CalendarClock } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants import
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,19 +40,20 @@ const LoadingSkeleton: FC = () => (
 );
 
 const PAGE_SIZE = 15;
-const BATCH_SIZE = 200;
+const DELETE_BATCH_SIZE = 200;
 
 const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage }) => {
-  const { deleteWord } = useVocabulary();
+  const { deleteWord, deleteWordsBatch } = useVocabulary();
   const { toast } = useToast();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [wordToDelete, setWordToDelete] = useState<{ id: string; text: string } | null>(null);
   const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [page, setPage] = useState(0);
-  const [deleteProgress, setDeleteProgress] = useState(0); // Progress state (0-100)
+  const [deleteProgress, setDeleteProgress] = useState(0);
   const [deleteProgressInfo, setDeleteProgressInfo] = useState({ current: 0, total: 0 });
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [page, setPage] = useState(0);
+  const initialDeleteCountRef = useRef<number>(0);
 
   const pageCount = Math.ceil(propWords.length / PAGE_SIZE);
   const pagedWords = propWords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -76,45 +76,38 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
     }
   }, [wordToDelete, deleteWord, toast]);
 
-  const startDeleteAll = useCallback(() => {
-    setIsDeleteConfirming(true);
+  const openDeleteAllDialog = () => {
+    initialDeleteCountRef.current = propWords.length;
+    setIsDeleteAllOpen(true);
+  };
+
+  const startDeleteAll = useCallback(async () => {
+    setIsDeletingAll(true);
     setDeleteProgress(0);
     setDeleteProgressInfo({ current: 0, total: propWords.length });
-    setTimeout(async () => {
-      setIsDeletingAll(true);
-      try {
-        for (let i = 0; i < propWords.length; i += BATCH_SIZE) {
-          const batch = propWords.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map(word => deleteWord(word.id)));
-          const done = Math.min(i + batch.length, propWords.length);
-          setDeleteProgress(Math.round((done / propWords.length) * 100));
-          setDeleteProgressInfo({
-            current: done,
-            total: propWords.length
-          });
-        }
-        setDeleteProgress(100);
-        setDeleteProgressInfo({
-          current: propWords.length,
-          total: propWords.length
-        });
-        showStandardToast(
-          toast,
-          'success',
-          'All Words Deleted',
-          'All words have been removed from your library.'
-        );
-      } catch (e) {
-        showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
-      } finally {
-        setIsDeletingAll(false);
-        setIsDeleteConfirming(false);
+    try {
+      for (let i = 0; i < propWords.length; i += DELETE_BATCH_SIZE) {
+        const batch = propWords.slice(i, i + DELETE_BATCH_SIZE);
+        const batchIds = batch.map(word => word.id);
+        await deleteWordsBatch(batchIds);
+        const done = Math.min(i + batch.length, propWords.length);
+        setDeleteProgress(Math.round((done / propWords.length) * 100));
+        setDeleteProgressInfo({ current: done, total: propWords.length });
+      }
+      setDeleteProgress(100);
+      setDeleteProgressInfo({ current: propWords.length, total: propWords.length });
+      showStandardToast(toast, 'success', 'All Words Deleted', 'All words have been removed from your library.');
+    } catch (e) {
+      showStandardToast(toast, 'error', 'Error Deleting All Words', 'Could not delete all words. Please try again.');
+    } finally {
+      setIsDeletingAll(false);
+      setTimeout(() => {
         setDeleteProgress(0);
         setDeleteProgressInfo({ current: 0, total: 0 });
         setIsDeleteAllOpen(false);
-      }
-    }, 100);
-  }, [propWords, deleteWord, toast]);
+      }, 800);
+    }
+  }, [propWords, deleteWordsBatch, toast]);
 
   if (isLoading) {
     return <LoadingSkeleton />;
@@ -131,7 +124,7 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
   return (
     <>
       <div className="flex justify-between items-center mb-2">
-        <Button variant="destructive" size="sm" onClick={() => setIsDeleteAllOpen(true)} disabled={propWords.length === 0}>
+        <Button variant="destructive" size="sm" onClick={openDeleteAllDialog} disabled={propWords.length === 0}>
           Delete All Words
         </Button>
         {pageCount > 1 && (
@@ -196,25 +189,37 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={isDeleteAllOpen} onOpenChange={open => { if (!isDeletingAll && !isDeleteConfirming) setIsDeleteAllOpen(open); }}>
+      <AlertDialog
+        open={isDeleteAllOpen || isDeletingAll}
+        onOpenChange={open => {
+          if (!isDeletingAll) setIsDeleteAllOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete ALL words?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <strong>{propWords.length}</strong> words from your library. This action cannot be undone.
+              This will permanently remove <strong>{initialDeleteCountRef.current}</strong> words from your library. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {!isDeleteConfirming && !isDeletingAll && (
+            {!isDeletingAll && (
               <>
-                <AlertDialogCancel onClick={() => setIsDeleteAllOpen(false)} disabled={isDeletingAll || isDeleteConfirming}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={startDeleteAll} className={buttonVariants({variant: "destructive"})} disabled={isDeletingAll || isDeleteConfirming}>
+                <AlertDialogCancel onClick={() => setIsDeleteAllOpen(false)} disabled={isDeletingAll}>
+                  Cancel
+                </AlertDialogCancel>
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: "destructive" })}
+                  onClick={startDeleteAll}
+                  disabled={isDeletingAll}
+                >
                   Delete All Words
-                </AlertDialogAction>
+                </button>
               </>
             )}
           </AlertDialogFooter>
-          {(isDeleteConfirming || isDeletingAll || deleteProgress > 0) && deleteProgressInfo.total > 0 ? (
+          {(isDeletingAll || deleteProgress > 0) && deleteProgressInfo.total > 0 ? (
             <div className="w-full mt-4">
               <div className="w-full bg-muted rounded h-4 overflow-hidden relative">
                 <div

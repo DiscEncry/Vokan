@@ -2,7 +2,7 @@
 
 import type { Word, FSRSCard } from '@/types';
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid'; // Ensure uuid is consistently imported
+import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './AuthContext';
 import { firestore } from '@/lib/firebase/firebaseConfig';
 import {
@@ -14,33 +14,20 @@ import {
   deleteDoc,
   query,
   orderBy,
-  Unsubscribe,
-  serverTimestamp,
-  Timestamp,
   writeBatch,
-  limit,
-  getDocs,
-  QueryDocumentSnapshot,
-  Firestore // <-- Add this import for type casting
+  Firestore
 } from 'firebase/firestore';
-import { FSRS, createEmptyCard, Rating } from 'ts-fsrs';
+import { FSRS, createEmptyCard } from 'ts-fsrs';
 import { useToast } from '@/hooks/use-toast';
 import { generateDecoyWords } from '@/lib/generateDecoyWords';
 import { showStandardToast } from '@/lib/showStandardToast';
 
-// Note: Trie and common word list logic (getCommonWordData, CommonWordData, getWordSuggestionsFromLoader)
-// are removed as autocomplete is now handled by useAutocomplete hook.
-
-const STORAGE_KEY = 'lexify-vocabulary';
-export const MAX_WORD_LENGTH = 100; // Exporting for use in AddWordForm
-
 const initialFSRSCard = (): FSRSCard => {
-  // Use createEmptyCard from ts-fsrs v6 and convert Date fields to ISO string
   const card = createEmptyCard();
   return {
     ...card,
     due: new Date().toISOString(),
-    last_review: null, // Use null instead of undefined for Firestore compatibility
+    last_review: null,
     state: typeof card.state === 'number' ? ['New', 'Learning', 'Review', 'Relearning'][card.state] as FSRSCard['state'] : card.state,
   };
 };
@@ -51,6 +38,7 @@ interface VocabularyContextType {
   addWordsBatch: (texts: string[]) => Promise<number>;
   updateWordSRS: (wordId: string, rating: number) => Promise<boolean>;
   deleteWord: (wordId: string) => Promise<boolean>;
+  deleteWordsBatch: (wordIds: string[]) => Promise<boolean>; // <-- add this
   getWordById: (wordId: string) => Word | undefined;
   getDecoyWords: (targetWordId: string, count: number) => Word[];
   isLoading: boolean;
@@ -221,6 +209,27 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [words, user, toast]);
 
+  const deleteWordsBatch = useCallback(async (wordIds: string[]): Promise<boolean> => {
+    if (!user || !firestore || !wordIds.length) return false;
+    try {
+      setIsSyncing(true);
+      const batch = writeBatch(firestore);
+      wordIds.forEach(wordId => {
+        const wordDoc = doc(firestore as Firestore, `users/${user.uid}/words/${wordId}`);
+        batch.delete(wordDoc);
+      });
+      await batch.commit();
+      // No local setWords: Firestore onSnapshot will update state
+      return true;
+    } catch (error) {
+      console.error("[VocabularyContext] Error batch deleting words:", error);
+      showStandardToast(toast, 'error', 'Error', 'Failed to delete words. Please try again.');
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [user, firestore, toast]);
+
   const getWordById = useCallback((wordId: string): Word | undefined => {
     return words.find(word => word.id === wordId);
   }, [words]);
@@ -256,11 +265,12 @@ export const VocabularyProvider = ({ children }: { children: ReactNode }) => {
     addWordsBatch,
     updateWordSRS,
     deleteWord,
+    deleteWordsBatch, // <-- add to context
     getWordById,
     getDecoyWords,
     isLoading,
     isSyncing,
-  }), [words, addWord, addWordsBatch, updateWordSRS, deleteWord, getWordById, getDecoyWords, isLoading, isSyncing]);
+  }), [words, addWord, addWordsBatch, updateWordSRS, deleteWord, deleteWordsBatch, getWordById, getDecoyWords, isLoading, isSyncing]);
 
   return (
     <VocabularyContext.Provider value={contextValue}>
@@ -283,3 +293,5 @@ export function useWordsSelector<T>(selector: (words: Word[]) => T): T {
   const selected = useMemo(() => selector(words), [words, selector]);
   return selected;
 }
+
+export const MAX_WORD_LENGTH = 50;
