@@ -245,29 +245,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Create Firebase Auth user first
         const result = await createUserWithEmailAndPassword(auth, email, password);
-        // Call secure API route for atomic registration and rate limiting
-        const res = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            password, // Optionally send for server-side validation, or omit if not needed
-            username,
-            uid: result.user.uid,
-            provider: 'password',
-          }),
+        // Create Firestore profile and username lock client-side
+        const { registerUserWithUsername } = await import('@/lib/firebase/userProfile');
+        const { Timestamp } = await import('firebase/firestore');
+        await registerUserWithUsername({
+          uid: result.user.uid,
+          email,
+          username,
+          createdAt: Timestamp.now(),
+          provider: 'password',
         });
-        const data = await res.json();
-        if (!res.ok) {
-          // Optionally: delete the Firebase user if registration fails
-          let errorMsg = 'Registration failed. Please try again.';
-          if (data.error === 'Username already taken') {
-            errorMsg = 'This username is already taken. Please choose another.';
-          } else if (data.error) {
-            errorMsg = data.error;
-          }
-          return { error: errorMsg };
-        }
         dispatch({ type: 'SET_USER', user: result.user });
         dispatch({ type: 'SET_ERROR', error: null });
         return result.user;

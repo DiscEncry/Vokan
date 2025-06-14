@@ -54,7 +54,7 @@ export default function LoginForm({ onSuccess, onShowPasswordReset, onGoogleSign
         <FcGoogle size={20} /> Continue with Google
       </Button>
       <div className="flex justify-center mt-2">
-        <span className="text-sm text-gray-500">No account? <button type="button" className="text-blue-600 hover:underline" onClick={onShowRegister}>Register</button></span>
+        <span className="text-sm text-gray-500">No account? <button type="button" className="text-blue-600 hover:underline" onClick={() => { clearError(); onShowRegister && onShowRegister(); }}>Register</button></span>
       </div>
     </form>
   );

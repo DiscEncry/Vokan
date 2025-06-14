@@ -1,0 +1,32 @@
+Test 1: Clear all rules using only
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+Outcome: Worked normally
+
+Test 1.5: Clear all rules using
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} { 
+      allow read, write: if true;
+      allow create: if true;
+    }
+  }
+}
+Out come: Issue persist
+
+Test 2:
+Change from match /users/{userId} { to match /{document=**} {
+and delete both condition (from request.auth != null && request.auth.uid == userId) solve the issue.
+But if not doing any one of them (removing only condition, or doesnt switch to document=**, it wont work)
+(all other rules are not deleted)
+
+conclusion: all other rules seems to be working fine, or is it? so its the system that has the problem?

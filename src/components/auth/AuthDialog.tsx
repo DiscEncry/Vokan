@@ -158,7 +158,7 @@ export default function AuthDialog() {
               onSuccess={closeDialog}
               onGoogleSignIn={handleGoogleSignIn}
               googleLoading={isGoogleLoading}
-              onShowLogin={() => setRegistering(false)}
+              onShowLogin={() => { clearError(); setRegistering(false); }}
             />
           ) : (
             <LoginForm
@@ -166,7 +166,7 @@ export default function AuthDialog() {
               onShowPasswordReset={() => setShowPasswordReset(true)}
               onGoogleSignIn={handleGoogleSignIn}
               googleLoading={isGoogleLoading}
-              onShowRegister={() => setRegistering(true)}
+              onShowRegister={() => { clearError(); setRegistering(true); }}
             />
           )}
         </DialogContent>

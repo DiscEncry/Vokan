@@ -1,11 +1,11 @@
 import { firestore } from './firebaseConfig';
-import { doc, setDoc, getDoc, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, getDoc, runTransaction, Timestamp } from 'firebase/firestore';
 import type { UserProfile } from '@/types/userProfile';
 
 export async function createUserProfile(profile: UserProfile) {
   if (!firestore) throw new Error('Firestore not initialized');
   const ref = doc(firestore, 'users', profile.uid);
-  await setDoc(ref, profile, { merge: false });
+  await setDoc(ref, { ...profile, createdAt: profile.createdAt instanceof Timestamp ? profile.createdAt : Timestamp.now() }, { merge: false });
 }
 
 export async function updateUserProfile(profile: UserProfile) {
@@ -31,7 +31,7 @@ export async function registerUserWithUsername(profile: UserProfile) {
     if (usernameSnap.exists()) {
       throw new Error('Username already taken');
     }
-    transaction.set(userRef, profile, { merge: false });
+    transaction.set(userRef, { ...profile, createdAt: profile.createdAt instanceof Timestamp ? profile.createdAt : Timestamp.now() }, { merge: false });
     transaction.set(usernameRef, { uid: profile.uid, username: profile.username.toLowerCase() });
   });
 }

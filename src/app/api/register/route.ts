@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase/firebaseConfig';
-import { doc, runTransaction } from 'firebase/firestore';
-import { z } from 'zod';
+import { doc, runTransaction, Timestamp } from 'firebase/firestore';
+import { registrationSchema } from '@/lib/validation';
 import zxcvbn from 'zxcvbn';
-
-// Registration schema (reuse from validation.ts if possible)
-const registrationSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8).max(100),
-  username: z.string().min(3).max(20).regex(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/),
-  uid: z.string(),
-  provider: z.enum(['google', 'password']),
-});
+import type { UserProfile } from '@/types/userProfile';
 
 const RATE_LIMIT_ATTEMPTS = 10;
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -49,12 +41,13 @@ async function checkAndUpdateRateLimit(email: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    // Use shared registration schema
     const parsed = registrationSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
-    const { email, username, uid, provider, password } = parsed.data;
-    // Server-side password strength validation
+    const { email, username, uid, provider, password, confirm } = parsed.data;
+    // Password strength validation
     const pwStrength = zxcvbn(password);
     if (pwStrength.score < 3) {
       return NextResponse.json({ error: 'Password is too weak. Please use a mix of uppercase, lowercase, numbers, and symbols.' }, { status: 400 });
@@ -64,19 +57,36 @@ export async function POST(req: NextRequest) {
     if (!rateLimit.allowed) {
       return NextResponse.json({ error: `Too many registration attempts. Try again in ${Math.ceil((rateLimit.retryAfter || 0) / 1000)} seconds.` }, { status: 429 });
     }
+    // Ensure email and username are unique
     // Atomic registration: username lock + user profile
     const userRef = doc(firestore, 'users', uid);
     const usernameRef = doc(firestore, 'usernames', username.toLowerCase());
+    const emailRef = doc(firestore, 'emails', email.toLowerCase());
     await runTransaction(firestore, async (transaction) => {
       const usernameSnap = await transaction.get(usernameRef);
       if (usernameSnap.exists()) {
         throw new Error('Username already taken');
       }
-      transaction.set(userRef, { ...parsed.data, createdAt: new Date().toISOString() }, { merge: false });
+      const emailSnap = await transaction.get(emailRef);
+      if (emailSnap.exists()) {
+        throw new Error('Email already registered');
+      }
+      const userProfile: UserProfile = {
+        uid,
+        email: email.toLowerCase(),
+        username: username.toLowerCase(),
+        createdAt: Timestamp.now(),
+        provider,
+      };
+      transaction.set(userRef, userProfile, { merge: false });
       transaction.set(usernameRef, { uid, username: username.toLowerCase() });
+      transaction.set(emailRef, { uid, email: email.toLowerCase() });
     });
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || 'Registration failed.' }, { status: 400 });
+    // Log error for monitoring
+    console.error('Registration error:', e);
+    // Generic error to avoid leaking info
+    return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 400 });
   }
 }

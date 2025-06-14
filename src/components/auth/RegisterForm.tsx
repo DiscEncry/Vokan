@@ -172,6 +172,9 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
     onSuccess?.();
   };
 
+  // Only show global error if not a field-level error
+  const shouldShowGlobalError = authError && !emailFormatError && !emailTakenError && !usernameError && !passwordError && !confirmError;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4" aria-live="polite">
       <div className="space-y-2 relative">
@@ -217,7 +220,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         </div>
         {!confirmValid && confirmError && <div className="text-xs text-red-500 mt-1" id="confirm-error" aria-live="polite">{confirmError}</div>}
       </div>
-      <FormStatusMessage message={authError} type="error" />
+      {shouldShowGlobalError && <FormStatusMessage message={authError} type="error" />}
       <Button type="submit" className="w-full" disabled={
         isLoading ||
         !emailValid ||
@@ -232,7 +235,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         <FcGoogle size={20} /> Continue with Google
       </Button>
       <div className="flex justify-center mt-2">
-        <span className="text-sm text-gray-500">Have an account? <button type="button" className="text-blue-600 hover:underline" onClick={() => onShowLogin && onShowLogin()}>Sign in</button></span>
+        <span className="text-sm text-gray-500">Have an account? <button type="button" className="text-blue-600 hover:underline" onClick={() => { clearError(); onShowLogin && onShowLogin(); }}>Sign in</button></span>
       </div>
     </form>
   );
