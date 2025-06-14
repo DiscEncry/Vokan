@@ -19,9 +19,6 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 
-const AccountDeletionForm = dynamic(() => import("./AccountDeletionForm"), { ssr: false });
-const DevDeleteAllAccountsButton = dynamic(() => import("./DevDeleteAllAccountsButton"), { ssr: false });
-
 export default function Auth() {
 	const { user, logout } = useAuth();
 	const [open, setOpen] = useState(false);
@@ -47,10 +44,6 @@ export default function Auth() {
 
 		if (activeTab === "register") {
 			return <SetPasswordForm />;
-		}
-
-		if (activeTab === "account") {
-			return <AccountDeletionForm />;
 		}
 
 		return null;
@@ -100,7 +93,6 @@ export default function Auth() {
 						</TabsContent>
 						<TabsContent value="account">
 							{renderContent}
-							<DevDeleteAllAccountsButton />
 						</TabsContent>
 					</Tabs>
 				</DialogContent>

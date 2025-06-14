@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import ProfileForm from '@/components/auth/ProfileForm';
 import SetPasswordForm from '@/components/auth/SetPasswordForm';
 import AccountDeletionForm from '@/components/auth/AccountDeletionForm';
@@ -9,7 +9,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { Loader2, ArrowLeft, Mail, Lock, Trash2, User, Shield, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import DevDeleteAllAccountsButton from '@/components/auth/DevDeleteAllAccountsButton';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,10 +61,6 @@ export default function SettingsPage() {
               <Button onClick={() => router.push('/auth')} className="mb-8">
                 Sign In
               </Button>
-              {/* Dev-only: allow deleting all accounts even if not signed in */}
-              <div className="pt-8 border-t">
-                <DevDeleteAllAccountsButton />
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -285,26 +280,6 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <AccountDeletionForm />
-          </CardContent>
-        </Card>
-
-        {/* Dev Controls */}
-        <Card className="border-0 shadow-lg border-l-4 border-l-orange-500">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                <Settings className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-orange-600">Developer Tools</CardTitle>
-                <CardDescription>
-                  Development and testing utilities (not visible in production)
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <DevDeleteAllAccountsButton />
           </CardContent>
         </Card>
       </div>
