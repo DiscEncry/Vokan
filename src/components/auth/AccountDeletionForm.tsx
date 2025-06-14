@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
-import * as Sentry from "@sentry/nextjs";
 
 export default function AccountDeletionForm() {
   const { user, signOut } = useAuth();
@@ -19,7 +18,6 @@ export default function AccountDeletionForm() {
       setSuccess("Account deleted. We're sorry to see you go.");
       await signOut();
     } catch (err: any) {
-      Sentry.captureException(err);
       setError(err.message || "Failed to delete account. Please re-authenticate and try again.");
     } finally {
       setLoading(false);

@@ -1,9 +1,4 @@
 "use client";
-if (typeof window === 'undefined') {
-  require('@/lib/sentry.server');
-} else {
-  require('@/lib/sentry.client');
-}
 import { ReactNode } from "react";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/context/AuthContext";
