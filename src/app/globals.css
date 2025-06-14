@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes spinner {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.custom-spin {
+  animation: spinner 0.6s linear infinite;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif; /* Removed var(--font-geist-sans) */
 }
