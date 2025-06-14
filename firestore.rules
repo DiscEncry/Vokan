@@ -8,7 +8,8 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.username is string
-        && request.resource.data.username.matches(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/)
+        && request.resource.data.username.size() >= 3
+        && request.resource.data.username.size() <= 20
         && request.resource.data.createdAt is timestamp
         && request.resource.data.provider in ['google', 'password']
         // Add more thorough validation for all fields
@@ -20,7 +21,13 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.provider == resource.data.provider
         && request.resource.data.username is string
-        && request.resource.data.username.matches(/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/);
+        && request.resource.data.username.size() >= 3
+        && request.resource.data.username.size() <= 20;
+
+      // Add rules for the words subcollection
+      match /words/{wordId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     // Username uniqueness: atomic check and lock
     match /usernames/{usernameDocId} {
@@ -43,12 +50,12 @@ service cloud.firestore {
         && request.resource.data.darkMode in ['light', 'dark', 'system'];
       allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['dailyReminders', 'soundEffects', 'shareProgress', 'reviewNotifications', 'loginNotifications', 'darkMode'])
-        && (request.resource.data.containsKey('dailyReminders') ? request.resource.data.dailyReminders is bool : true)
-        && (request.resource.data.containsKey('soundEffects') ? request.resource.data.soundEffects is bool : true)
-        && (request.resource.data.containsKey('shareProgress') ? request.resource.data.shareProgress is bool : true)
-        && (request.resource.data.containsKey('reviewNotifications') ? request.resource.data.reviewNotifications is bool : true)
-        && (request.resource.data.containsKey('loginNotifications') ? request.resource.data.loginNotifications is bool : true)
-        && (request.resource.data.containsKey('darkMode') ? request.resource.data.darkMode in ['light', 'dark', 'system'] : true);
+        && ('dailyReminders' in request.resource.data ? request.resource.data.dailyReminders is bool : true)
+        && ('soundEffects' in request.resource.data ? request.resource.data.soundEffects is bool : true)
+        && ('shareProgress' in request.resource.data ? request.resource.data.shareProgress is bool : true)
+        && ('reviewNotifications' in request.resource.data ? request.resource.data.reviewNotifications is bool : true)
+        && ('loginNotifications' in request.resource.data ? request.resource.data.loginNotifications is bool : true)
+        && ('darkMode' in request.resource.data ? request.resource.data.darkMode in ['light', 'dark', 'system'] : true);
     }
     // Word Details Cache: restrict write, validate data (example: only allow authenticated users, and validate fields)
     match /wordDetailsCache/{wordText} {
