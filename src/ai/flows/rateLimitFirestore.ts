@@ -1,5 +1,5 @@
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, FieldValue } from "firebase/firestore";
-import { getApp } from "firebase/app";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getFirebaseAdminApp } from "@/lib/firebase/firebaseAdmin";
 
 // Log rate limit events for monitoring
 async function logRateLimitEvent({
@@ -13,14 +13,14 @@ async function logRateLimitEvent({
   retryAfter?: number;
   ip?: string;
 }) {
-  const db = getFirestore(getApp());
-  const ref = doc(db, "rateLimitLogs", `${key}_${Date.now()}`);
-  await setDoc(ref, {
+  const db = getFirestore(getFirebaseAdminApp());
+  const ref = db.collection("rateLimitLogs").doc(`${key}_${Date.now()}`);
+  await ref.set({
     key,
     allowed,
     retryAfter: retryAfter || null,
     ip: ip || null,
-    timestamp: serverTimestamp(),
+    timestamp: FieldValue.serverTimestamp(),
   });
 }
 
@@ -39,12 +39,12 @@ export async function checkAndUpdateRateLimit({
   windowMs: number;
   ip?: string;
 }): Promise<{ allowed: boolean; retryAfter?: number }> {
-  const db = getFirestore(getApp());
-  const ref = doc(db, "rateLimits", key);
+  const db = getFirestore(getFirebaseAdminApp());
+  const ref = db.collection("rateLimits").doc(key);
   const now = Date.now();
-  const docSnap = await getDoc(ref);
+  const docSnap = await ref.get();
 
-  let data = docSnap.exists() ? docSnap.data() : null;
+  let data = docSnap.exists ? docSnap.data() : null;
   let count = 0;
   let reset = now + windowMs;
 
@@ -63,17 +63,17 @@ export async function checkAndUpdateRateLimit({
     retryAfter = reset - now;
   }
 
-  if (docSnap.exists()) {
-    await updateDoc(ref, {
+  if (docSnap.exists) {
+    await ref.update({
       count: allowed ? count + 1 : count,
       reset,
-      last: serverTimestamp(),
+      last: FieldValue.serverTimestamp(),
     });
   } else {
-    await setDoc(ref, {
+    await ref.set({
       count: 1,
       reset,
-      last: serverTimestamp(),
+      last: FieldValue.serverTimestamp(),
     });
   }
 
