@@ -12,6 +12,8 @@ import { FaCircleCheck } from "react-icons/fa6";
 import { useDebounceEffect } from "@/hooks/useDebounce";
 import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://your-api.vercel.app";
+
 interface RegisterFormProps {
   onSuccess?: () => void;
   onGoogleSignIn?: () => Promise<void>;
@@ -69,7 +71,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         emailAbortController.current.abort();
       }
       emailAbortController.current = new AbortController();
-      fetch(`/api/check-email?email=${encodeURIComponent(formData.email)}`, { signal: emailAbortController.current.signal })
+      fetch(`${API_BASE_URL}/api/check-email?email=${encodeURIComponent(formData.email)}`, { signal: emailAbortController.current.signal })
         .then(res => res.json())
         .then(data => {
           if (reqId !== emailRequestCounter.current) return; // Only update if latest
@@ -110,7 +112,7 @@ export default function RegisterForm({ onSuccess, onGoogleSignIn, googleLoading,
         usernameAbortController.current.abort();
       }
       usernameAbortController.current = new AbortController();
-      fetch(`/api/check-username?username=${encodeURIComponent(formData.username)}`, { signal: usernameAbortController.current.signal })
+      fetch(`${API_BASE_URL}/api/check-username?username=${encodeURIComponent(formData.username)}`, { signal: usernameAbortController.current.signal })
         .then(res => res.json())
         .then(data => {
           if (reqId !== usernameRequestCounter.current) return;

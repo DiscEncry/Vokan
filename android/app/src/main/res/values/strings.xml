@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vokan</string>
+    <string name="title_activity_main">Vokan</string>
+    <string name="package_name">vokan.vercel.app</string>
+    <string name="custom_url_scheme">vokan.vercel.app</string>
+</resources>

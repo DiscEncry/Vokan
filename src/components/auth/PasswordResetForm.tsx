@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormStatusMessage } from "@/components/ui/FormStatusMessage";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://your-api.vercel.app";
+
 export default function PasswordResetForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<null | { type: "success" | "error"; message: string }>(null);
@@ -15,7 +17,7 @@ export default function PasswordResetForm() {
     setStatus(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/password-reset", {
+      const res = await fetch(`${API_BASE_URL}/api/password-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

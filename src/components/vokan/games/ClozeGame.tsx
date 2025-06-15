@@ -240,13 +240,14 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
 
   if (!core.hasEnoughWords && !core.vocabLoading && !core.gameInitialized) {
     return (
-      <EmptyState
-        title="Not Enough Words"
-        description="You need at least 4 unique words (1 target + 3 decoys). Add more words in the Library tab."
-        icon={<Lightbulb className="h-5 w-5 text-primary" />}
-      >
+      <div className="flex flex-col items-center justify-center min-h-[200px] p-4">
+        <EmptyState
+          title="Not Enough Words"
+          description="You need at least 4 unique words (1 target + 3 decoys). Add more words in the Library tab."
+          icon={<Lightbulb className="h-5 w-5 text-primary" />}
+        />
         <Button onClick={onStopGame} variant="outline" className="mt-4">Back to Games Menu</Button>
-      </EmptyState>
+      </div>
     );
   }
 

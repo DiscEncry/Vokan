@@ -13,6 +13,8 @@ import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter";
 import { usePasswordValidation } from "@/hooks/usePasswordValidation";
 import { useDebounceEffect } from "@/hooks/useDebounce";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://your-api.vercel.app";
+
 export default function ResetPasswordPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -64,7 +66,7 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/password-reset/confirm", {
+      const res = await fetch(`${API_BASE_URL}/api/password-reset/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oobCode, newPassword: form.password }),

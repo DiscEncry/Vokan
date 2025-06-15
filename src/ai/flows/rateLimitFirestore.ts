@@ -1,4 +1,4 @@
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, FieldValue } from "firebase/firestore";
 import { getApp } from "firebase/app";
 
 // Log rate limit events for monitoring

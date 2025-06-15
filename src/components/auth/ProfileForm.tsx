@@ -9,6 +9,8 @@ import { useDebounceEffect } from "@/hooks/useDebounce";
 import type { UserProfile } from "@/types/userProfile";
 import { CheckCircle } from "lucide-react";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://your-api.vercel.app";
+
 export default function ProfileForm({ initialProfile, onSuccess }: {
   initialProfile: UserProfile;
   onSuccess?: (profile: UserProfile) => void;
@@ -44,7 +46,7 @@ export default function ProfileForm({ initialProfile, onSuccess }: {
       setUsernameChecking(true);
       setUsernameUnique(null);
       setUsernameError(null);
-      fetch(`/api/check-username?username=${encodeURIComponent(username)}`)
+      fetch(`${API_BASE_URL}/api/check-username?username=${encodeURIComponent(username)}`)
         .then(res => res.json())
         .then(data => {
           setUsernameUnique(data.available);
