@@ -314,7 +314,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
         </span>
       );
     }
-    return <div className="flex flex-wrap justify-center items-center p-2 cursor-text" onClick={() => hiddenInputRef.current?.focus()}>{displaySpans}</div>;
+    return <div className="flex flex-wrap justify-center items-center cursor-text" onClick={() => hiddenInputRef.current?.focus()}>{displaySpans}</div>;
   }, [core.currentQuestion, answerState.userInput, answerState.showCorrectAnswer, answerState.isCorrect]);
 
   // Keyboard shortcuts
@@ -358,9 +358,9 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="shadow-xl max-w-2xl mx-auto">
-        <CardHeader className="relative">
+    <div className="space-y-4">
+      <Card className="shadow-lg max-w-2xl mx-auto">
+        <CardHeader className="relative pb-4">
           {/* Indicators in top left */}
           {(() => {
             const wordObj = core.currentQuestion ? core.libraryWords.find(w => w.text === core.currentQuestion?.targetWord) : undefined;
@@ -373,23 +373,23 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
             );
           })()}
           <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl">Text Input Challenge</CardTitle>
+            <CardTitle className="text-xl">Text Input Challenge</CardTitle>
             {(core.isLoadingNextQuestion) && (
               <div className="flex items-center text-xs text-muted-foreground">
-                <Sparkles className="h-4 w-4 text-primary mr-1" /> 
-                <span>Preparing next...</span>
+                <Sparkles className="h-3 w-3 text-primary mr-1" /> 
+                <span>Preparing...</span>
                 <Loader2 className="h-3 w-3 animate-spin ml-1" />
               </div>
             )}
           </div>
-          <CardDescription>Type the English word that fits the blank. Check the Vietnamese hint below!</CardDescription>
+          <CardDescription className="text-sm">Type the English word that fits the blank</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4 sm:space-y-6">
+        <CardContent className="space-y-4">
           {core.isLoadingCurrentQuestion && !core.currentQuestion && (
-            <div className="flex items-center justify-center h-48">
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="ml-3 text-lg text-muted-foreground">Generating question...</p>
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-3 text-muted-foreground">Generating question...</p>
             </div>
           )}
 
@@ -400,48 +400,43 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
                   {core.currentQuestion.sentenceWithBlank.replace(/___/g, " ______ ")}
                 </p>
               </div>
-              <p className="text-sm text-center text-muted-foreground italic px-2 py-1 bg-secondary/30 rounded-md">
-                Hint: {core.currentQuestion.translatedHint}
-              </p>
-              <div className="flex flex-col items-center gap-2">
-                <div
-                  className="w-full flex flex-wrap justify-center items-center p-2 cursor-text border-2 border-muted-foreground rounded-lg min-h-[56px] focus-within:ring-2 focus-within:ring-primary transition-all bg-background"
-                  tabIndex={0}
-                  aria-label="Type the missing word here"
-                  onClick={() => hiddenInputRef.current?.focus()}
-                  style={{ outline: 'none' }}
-                >
-                  {renderCharacterSpans()}
-                  <input
-                    ref={hiddenInputRef}
-                    type="text"
-                    value={answerState.userInput}
-                    onChange={handleHiddenInputChange}
-                    className="fixed -top-10 left-0 w-0 h-0 opacity-0 pointer-events-none"
-                    aria-label="Type the missing word here"
-                    maxLength={(core.currentQuestion?.correctAnswer?.length || 0) + 10}
-                    disabled={disabled || answerState.isCorrect !== null}
-                    autoFocus
-                    tabIndex={-1}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground mt-1">Tap or click the blanks to type your answer</span>
+              <div className="text-center mb-4">
+                <span className="text-sm text-muted-foreground bg-secondary/20 rounded px-3 py-1">
+                  {core.currentQuestion.translatedHint}
+                </span>
               </div>
+
+              <div className="flex flex-col items-center gap-3">
+                {renderCharacterSpans()}
+                <input
+                  ref={hiddenInputRef}
+                  type="text"
+                  value={answerState.userInput}
+                  onChange={handleHiddenInputChange}
+                  className="fixed -top-10 left-0 w-0 h-0 opacity-0 pointer-events-none"
+                  aria-label="Type the missing word here"
+                  maxLength={(core.currentQuestion?.correctAnswer?.length || 0) + 10}
+                  disabled={disabled || answerState.isCorrect !== null}
+                  autoFocus
+                  tabIndex={-1}
+                />
+              </div>
+
               {answerState.isCorrect === false && answerState.showCorrectAnswer && (
-                <p className="text-sm text-red-500 dark:text-red-400 text-center font-semibold">
-                  The correct answer was: "{core.currentQuestion.correctAnswer}"
+                <p className="text-sm text-red-500 dark:text-red-400 text-center font-medium">
+                  Correct answer: "{core.currentQuestion.correctAnswer}"
                 </p>
               )}
-              <div className="flex justify-center pt-2">
+
+              <div className="flex justify-center">
                 <Button 
                   onClick={() => core.currentQuestion && answerState.revealHint(core.currentQuestion)} 
                   variant="outline" 
                   size="sm" 
                   disabled={disabled || answerState.hintRevealed || answerState.isCorrect !== null}
-                  className="w-full sm:w-auto"
                 >
-                  <KeyRound className="mr-2 h-4 w-4" /> 
-                  Reveal Hint (1 use)
+                  <KeyRound className="mr-2 h-3 w-3" /> 
+                  Reveal Hint
                 </Button>
               </div>
             </>
@@ -464,37 +459,35 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
           )}
         </CardContent>
 
-        <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4">
-          <Button onClick={onStopGame} variant="outline" size="lg" className="w-full sm:w-auto"
+        <CardFooter className="flex justify-between items-center gap-3 pt-2">
+          <Button onClick={onStopGame} variant="outline" size="default"
             disabled={disabled || isLoadingTransition.current}>
-            <StopCircle className="mr-2 h-5 w-5" /> Stop Game
+            <StopCircle className="mr-2 h-4 w-4" /> Stop
           </Button>
 
           {answerState.isCorrect === null && core.currentQuestion && (
             <Button 
               onClick={handleSubmit} 
               disabled={disabled || answerState.userInput.trim().length === 0 || isLoadingTransition.current} 
-              size="lg" 
-              className="w-full sm:w-auto"
+              size="default"
             >
-              <Send className="mr-2 h-5 w-5" /> Submit Answer
+              <Send className="mr-2 h-4 w-4" /> Submit
             </Button>
           )}
 
           {answerState.isCorrect !== null && ( 
             <Button 
               onClick={loadCurrentAndPrepareNext} 
-              className="w-full sm:w-auto" 
-              size="lg" 
+              size="default" 
               variant="default"
               disabled={disabled || isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion}
             >
               {(isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion) ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="mr-2 h-5 w-5" />
+                <RefreshCw className="mr-2 h-4 w-4" />
               )}
-              Next Question (Space/Enter)
+              Next (Space/Enter)
             </Button>
           )}
         </CardFooter>

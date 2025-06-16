@@ -13,11 +13,14 @@ import {
   EmailAuthProvider,
   linkWithCredential,
   sendEmailVerification,
+  signInWithCredential,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
 import { createUserProfile, registerUserWithUsername, getUserProfile } from '@/lib/firebase/userProfile';
 import { checkUsernameExists } from '@/lib/firebase/checkUsernameExists';
 import type { UserProfile } from '@/types/userProfile';
+import { isNativeMobile, nativeGoogleSignIn } from '@/lib/firebase/nativeGoogleAuth';
+import { GoogleAuthProvider as FirebaseGoogleAuthProvider } from 'firebase/auth';
 
 function generateRandomUsername() {
   const random = Math.random().toString(36).substring(2, 8);
@@ -161,13 +164,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return withRequestDeduplication(`signIn_${providerType}`, async () => {
       if (!auth) return { error: 'Internal error: Auth not initialized.' };
       try {
-        const provider = new GoogleAuthProvider();
-        const result = await signInWithPopup(auth, provider);
-        const email = result.user.email!;
-        const uid = result.user.uid;
-        // Check if user profile exists
-        let profile = await getUserProfile(uid);
+        let resultUser: User | null = null;
+        let email: string | undefined;
+        let uid: string | undefined;
         let isNewUser = false;
+        if (await isNativeMobile()) {
+          // Native mobile: use Capawesome Firebase Auth
+          const nativeResult = await nativeGoogleSignIn();
+          if (!nativeResult.credential?.idToken) {
+            throw new Error('No idToken returned from native Google sign-in');
+          }
+          const credential = FirebaseGoogleAuthProvider.credential(nativeResult.credential.idToken);
+          const result = await signInWithCredential(auth, credential);
+          resultUser = result.user;
+          email = result.user.email!;
+          uid = result.user.uid;
+        } else {
+          // Web: use popup
+          const provider = new GoogleAuthProvider();
+          const result = await signInWithPopup(auth, provider);
+          resultUser = result.user;
+          email = result.user.email!;
+          uid = result.user.uid;
+        }
+        // Check if user profile exists
+        let profile = await getUserProfile(uid!);
         if (!profile) {
           // New user: create random username and profile
           isNewUser = true;
@@ -182,22 +203,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await createUserProfile(profile);
         }
         // Optionally link password if provided
-        if (passwordToLink) {
-          await linkWithCredential(result.user, EmailAuthProvider.credential(email, passwordToLink));
+        if (passwordToLink && resultUser) {
+          await linkWithCredential(resultUser, EmailAuthProvider.credential(email!, passwordToLink));
         }
         // Always return showWelcome for new users
         if (isNewUser) {
           return { isNewUser: true, showWelcome: true, email, uid };
         }
-        return result.user;
+        return resultUser;
       } catch (error: any) {
         if (error.code === 'auth/account-exists-with-different-credential') {
           const email = error.customData?.email || error.email;
           const pendingCred = GoogleAuthProvider.credentialFromError?.(error);
           const methods = await fetchSignInMethodsForEmail(auth, email);
           if (methods.includes('password') && pendingCred) {
-            // Instead of returning an error, prompt for password and link automatically
-            // We'll return a special object to trigger the password prompt in the UI
             return {
               error: undefined,
               requirePasswordToLink: true,

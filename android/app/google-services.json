@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "447314587755",
+    "project_id": "vokan-ku0l7",
+    "storage_bucket": "vokan-ku0l7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447314587755:android:2f36828b2b65c278a8812e",
+        "android_client_info": {
+          "package_name": "vokan.vercel.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "447314587755-of7tjd500pc46hq1mesckjk6kq2as0dr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAGAtBh8_6oZYqHaix7wl5Iec61W4f6Jw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "447314587755-of7tjd500pc46hq1mesckjk6kq2as0dr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
