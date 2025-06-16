@@ -54,7 +54,7 @@ export default function Auth() {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent className="sm:max-w-[425px]">
 					<DialogHeader>
-						<DialogTitle>Welcome back</DialogTitle>
+						<DialogTitle>Welcome back V1</DialogTitle>
 						<DialogDescription>
 							{user ? "You are signed in as" : "Sign in to your account"}
 						</DialogDescription>
