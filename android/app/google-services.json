@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "447314587755-lbpai4r0thjr2t39cdgpjp3isdapsiml.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "vokan.vercel.app",
+            "certificate_hash": "628447785983cde9604250f53fac18a581a682c0"
+          }
+        },
+        {
           "client_id": "447314587755-of7tjd500pc46hq1mesckjk6kq2as0dr.apps.googleusercontent.com",
           "client_type": 3
         }

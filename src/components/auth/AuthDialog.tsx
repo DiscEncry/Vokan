@@ -148,7 +148,7 @@ export default function AuthDialog() {
       <Dialog open={showSignInDialog && !showPasswordReset} onOpenChange={() => {}}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isRegistering ? "Create Account" : "Welcome Back"}</DialogTitle>
+            <DialogTitle>{isRegistering ? "Create Account" : "Welcome Back V2"}</DialogTitle>
             <DialogDescription>
               {isRegistering ? "Register a new account" : "Sign in to your account"}
             </DialogDescription>

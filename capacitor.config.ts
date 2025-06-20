@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://vokan.vercel.app', // Replace with your actual Vercel deployment URL
     cleartext: true
+  },
+  plugins: {
+    FirebaseAuthentication: {
+      providers: ["google.com"]
+    }
   }
 };
 
