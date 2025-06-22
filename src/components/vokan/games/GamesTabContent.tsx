@@ -48,11 +48,11 @@ const GamesTabContent: FC = () => {
         {/* Games Grid */}
         <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Multiple Choice Game */}
-          <Card className="group relative overflow-hidden border border-border/60 bg-card/80 backdrop-blur-sm hover:border-primary/40 transition-all duration-300 ease-out hover:shadow-lg hover:shadow-primary/5 flex flex-col min-h-[320px] h-full">
+          <Card className="group relative overflow-hidden border border-border/60 bg-card/80 backdrop-blur-sm hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 flex flex-col min-h-[320px] h-full">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/4 via-primary/2 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
             <CardHeader className="relative z-10 pb-3 sm:pb-4 px-4 sm:px-6 pt-5 sm:pt-6">
-              <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-primary/8 border border-primary/15 mb-3 sm:mb-4 mx-auto group-hover:bg-primary/12 group-hover:border-primary/25 transition-all duration-300 group-hover:scale-105">
+              <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-primary/8 border border-primary/15 mb-3 sm:mb-4 mx-auto group-hover:bg-primary/12 group-hover:border-primary/25 transition-transform duration-300 group-hover:scale-105">
                 <ListChecks className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               </div>
               <CardTitle className="text-xl sm:text-2xl font-semibold text-center mb-1 sm:mb-2 leading-tight">
@@ -103,11 +103,11 @@ const GamesTabContent: FC = () => {
           </Card>
 
           {/* Text Input Game */}
-          <Card className="group relative overflow-hidden border border-border/60 bg-card/80 backdrop-blur-sm hover:border-primary/40 transition-all duration-300 ease-out hover:shadow-lg hover:shadow-primary/5 flex flex-col min-h-[320px] h-full">
+          <Card className="group relative overflow-hidden border border-border/60 bg-card/80 backdrop-blur-sm hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 flex flex-col min-h-[320px] h-full">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/4 via-primary/2 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
             <CardHeader className="relative z-10 pb-3 sm:pb-4 px-4 sm:px-6 pt-5 sm:pt-6">
-              <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-primary/8 border border-primary/15 mb-3 sm:mb-4 mx-auto group-hover:bg-primary/12 group-hover:border-primary/25 transition-all duration-300 group-hover:scale-105">
+              <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-primary/8 border border-primary/15 mb-3 sm:mb-4 mx-auto group-hover:bg-primary/12 group-hover:border-primary/25 transition-transform duration-300 group-hover:scale-105">
                 <Edit3 className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               </div>
               <CardTitle className="text-xl sm:text-2xl font-semibold text-center mb-1 sm:mb-2 leading-tight">
