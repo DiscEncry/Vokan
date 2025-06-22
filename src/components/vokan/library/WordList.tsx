@@ -24,6 +24,7 @@ import { isDue } from '@/lib/utils';
 import { Due } from './Due';
 import { WordStageIndicator } from '../games/WordStageIndicator';
 import { showStandardToast } from '@/lib/showStandardToast';
+import styles from './WordList.module.css';
 
 interface WordListProps {
   words: Word[];
@@ -58,23 +59,15 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
   const pageCount = Math.ceil(propWords.length / PAGE_SIZE);
   const pagedWords = propWords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const handleDeleteRequest = useCallback((wordId: string, wordText: string) => {
-    setWordToDelete({ id: wordId, text: wordText });
-    setIsAlertOpen(true);
-  }, []);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (wordToDelete) {
-      const success = await deleteWord(wordToDelete.id);
-      if (success) {
-        showStandardToast(toast, 'success', 'Word Deleted', `"${wordToDelete.text}" has been removed from your library.`);
-      } else {
-        showStandardToast(toast, 'error', 'Error Deleting Word', `Could not delete "${wordToDelete.text}". Please try again.`);
-      }
-      setWordToDelete(null);
-      setIsAlertOpen(false);
+  // Remove confirm dialog for single delete, delete immediately
+  const handleDeleteWord = useCallback(async (wordId: string, wordText: string) => {
+    const success = await deleteWord(wordId);
+    if (success) {
+      showStandardToast(toast, 'success', 'Word Deleted', `"${wordText}" has been removed from your library.`);
+    } else {
+      showStandardToast(toast, 'error', 'Error Deleting Word', `Could not delete "${wordText}". Please try again.`);
     }
-  }, [wordToDelete, deleteWord, toast]);
+  }, [deleteWord, toast]);
 
   const openDeleteAllDialog = () => {
     initialDeleteCountRef.current = propWords.length;
@@ -135,32 +128,33 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
           </div>
         )}
       </div>
-      <div className="rounded-md border shadow-inner">
+      <div className="rounded-xl border shadow-md overflow-hidden">
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
-              <TableHead className="w-[50%]">Word</TableHead>
-              <TableHead>Stage</TableHead>
-              <TableHead>Date Added</TableHead>
-              <TableHead className="text-right w-[10%]">Actions</TableHead>
+              <TableHead className="w-[50%] text-sm sm:text-base">Word</TableHead>
+              <TableHead className="text-sm sm:text-base">Stage</TableHead>
+              <TableHead className="hidden sm:table-cell text-sm sm:text-base">Date Added</TableHead>
+              <TableHead className="text-right w-[10%] text-sm sm:text-base">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pagedWords.map((word) => (
               <TableRow key={word.id} className="hover:bg-muted/50 transition-colors">
-                <TableCell className="font-medium text-base py-3 flex items-center gap-2 h-14 min-h-[3.5rem]">
+                <TableCell className="font-medium text-base py-4 flex items-center gap-3 min-h-[4rem]">
                   {word.text}
                   <Due isDue={isDue(word.fsrsCard.due)} />
                 </TableCell>
                 <TableCell><WordStageIndicator state={word.fsrsCard.state} /></TableCell>
-                <TableCell className="text-muted-foreground py-3 text-xs">
+                <TableCell className="hidden sm:table-cell text-muted-foreground py-3 text-xs">
                   {formatDistanceToNow(new Date(word.dateAdded), { addSuffix: true })}
                 </TableCell>
                 <TableCell className="text-right py-3">
                   <Button 
                     variant="ghost"
-                    size="sm" 
-                    onClick={() => handleDeleteRequest(word.id, word.text)}
+                    size="default"
+                    className={`h-10 w-10 p-0 ${styles['wordlist-delete-btn']}`}
+                    onClick={() => handleDeleteWord(word.id, word.text)}
                     aria-label={`Delete word ${word.text}`}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -171,23 +165,6 @@ const WordList: FC<WordListProps> = ({ words: propWords, isLoading, emptyMessage
           </TableBody>
         </Table>
       </div>
-
-      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this word?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The word <strong className="text-foreground">{wordToDelete?.text}</strong> will be permanently removed from your library.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setWordToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className={buttonVariants({variant: "destructive"})}>
-              Delete Word
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog
         open={isDeleteAllOpen || isDeletingAll}

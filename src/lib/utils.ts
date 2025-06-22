@@ -1,5 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { addQuizLogEntry } from './firebase/quizLog';
+import { useAuth } from '@/context/AuthContext';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -36,6 +38,15 @@ export function logQuizResult(
     while (prev.length > 200) prev.shift();
     localStorage.setItem(QUIZ_LOG_KEY, JSON.stringify(prev));
   } catch {}
+}
+
+// Async version for Firestore
+export async function logQuizResultFirestore(result: QuizLogEntry, uid?: string) {
+  if (uid) {
+    await addQuizLogEntry(uid, result);
+  } else {
+    logQuizResult(result); // fallback to localStorage
+  }
 }
 
 export type QuizLogEntry = {

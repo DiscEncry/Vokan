@@ -158,7 +158,7 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
         <CardDescription>Upload a .txt or .csv file. Words can be one per line or comma-separated.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex flex-col gap-3">
           <Input
             id="file-upload"
             type="file"
@@ -172,14 +172,14 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
           <Button
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
-            className="flex-shrink-0 w-full sm:w-auto"
+            className="flex-shrink-0 w-full"
             disabled={isProcessing}
           >
             <FileText className="mr-2 h-4 w-4" />
             Choose File
           </Button>
           {selectedFile && (
-            <span className="text-sm text-muted-foreground truncate mt-2 sm:mt-0">
+            <span className="text-sm text-muted-foreground truncate mt-2">
               {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
             </span>
           )}
@@ -187,7 +187,7 @@ const ImportWordsSection: FC<ImportWordsSectionProps> = ({ disabled }) => {
         <Button
           onClick={handleImport}
           disabled={!selectedFile || isProcessing}
-          className="w-full sm:w-auto"
+          className="w-full h-12 text-base font-medium"
         >
           {isProcessing ? (
             <>

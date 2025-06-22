@@ -13,6 +13,8 @@ import React from 'react';
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getQuizLog, QuizLogEntry } from '@/lib/utils';
 import { getWordStats } from './getWordStats';
+import { useAuth } from '@/context/AuthContext';
+import { getQuizLogEntries } from '@/lib/firebase/quizLog';
 
 // --- Placeholder implementations for missing functions ---
 function getSessionStats(words: any[]) {
@@ -84,8 +86,7 @@ const LoadingState: FC = () => (
 );
 
 // --- Calendar Heatmap for Study Streaks ---
-function getHeatmapData(months = 12) {
-  const log: QuizLogEntry[] = getQuizLog();
+function getHeatmapData(months = 12, log: QuizLogEntry[] = []) {
   const today = new Date();
   const start = new Date(today);
   start.setMonth(today.getMonth() - months + 1);
@@ -125,8 +126,8 @@ function getStreak(heatmap: { date: string; count: number }[]) {
   return { maxStreak, streak };
 }
 
-const CalendarHeatmap: FC = () => {
-  const days = getHeatmapData(12);
+const CalendarHeatmap: FC<{log: QuizLogEntry[]}> = ({ log }) => {
+  const days = getHeatmapData(12, log);
   const { maxStreak, streak } = getStreak(days);
   // Arrange as weeks (columns)
   const weeks: { date: string; count: number }[][] = [];
@@ -194,6 +195,26 @@ const CalendarHeatmap: FC = () => {
 
 const InsightsTabContent: FC = () => {
   const { words, isLoading } = useVocabulary();
+  const { user } = useAuth();
+  const [quizLog, setQuizLog] = useState<QuizLogEntry[] | null>(null);
+  const [logLoading, setLogLoading] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function fetchLog() {
+      setLogLoading(true);
+      if (user?.uid) {
+        const logs = await getQuizLogEntries(user.uid, 200);
+        if (!ignore) setQuizLog(logs);
+      } else {
+        setQuizLog(getQuizLog());
+      }
+      setLogLoading(false);
+    }
+    fetchLog();
+    return () => { ignore = true; };
+  }, [user]);
+
   // Use shared stats utility
   const stats = useMemo(() => getWordStats(words), [words]);
   
@@ -220,142 +241,156 @@ const InsightsTabContent: FC = () => {
 
   return (
     <div className="space-y-8 p-2 sm:p-4 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <ErrorBoundary FallbackComponent={ChartErrorFallback}>
-          <StageDistributionDonutChart words={words} isLoading={isLoading} />
-        </ErrorBoundary>
-        <div className="grid grid-cols-2 gap-4">
-          <StatsCard
-            title="Total Words"
-            value={stats.totalWords}
-            icon={<BookOpen className="h-5 w-5 text-blue-400" />}
-            description="Words in your library."
-          />
-          <StatsCard
-            title="Games Played Today"
-            value={(() => {
-              const log = getQuizLog();
-              const today = new Date();
-              today.setHours(0,0,0,0);
-              let count = 0;
-              log.forEach(r => {
-                const dt = new Date(r.timestamp);
-                dt.setHours(0,0,0,0);
-                if (dt.getTime() === today.getTime()) count++;
-              });
-              return count;
-            })()}
-            icon={<BarChartBig className="h-5 w-5 text-yellow-400" />}
-            description="Number of games played today."
-          />
-          <StatsCard
-            title="Mastered Words Today"
-            value={words.filter(w => w.fsrsCard.state === 'Review' && w.fsrsCard.last_review && new Date(w.fsrsCard.last_review).setHours(0,0,0,0) === new Date().setHours(0,0,0,0)).length}
-            icon={<BarChartBig className="h-5 w-5 text-green-500" />}
-            description="Words that reached 'mastered' (Review) state today."
-          />
-          <StatsCard
-            title="Retention Rate (7d)"
-            value={(() => {
-              const log = getQuizLog();
-              const today = new Date();
-              let total = 0, correct = 0;
-              for (let i = 0; i < 7; i++) {
-                const d = new Date(today);
-                d.setDate(today.getDate() - i);
-                d.setHours(0,0,0,0);
-                const key = d.toISOString().slice(0,10);
-                log.forEach(r => {
-                  const dt = new Date(r.timestamp);
-                  dt.setHours(0,0,0,0);
-                  if (dt.getTime() === d.getTime()) {
-                    total++;
-                    if (r.correct) correct++;
+      {/* First Section: Chart and Stats Cards */}
+      <div className="space-y-6">
+        {/* Chart and Stats - Side by side on larger screens, stacked on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Stats Cards Grid - Always first */}
+          <div>
+            <div className="grid grid-cols-2 gap-4 h-full">
+              <StatsCard
+                title="Total Words"
+                value={stats.totalWords}
+                icon={<BookOpen className="h-5 w-5 text-blue-400" />}
+                description="Words in your library."
+              />
+              <StatsCard
+                title="Games Played Today"
+                value={(() => {
+                  const log = quizLog ?? [];
+                  const today = new Date();
+                  today.setHours(0,0,0,0);
+                  let count = 0;
+                  log.forEach(r => {
+                    const dt = new Date(r.timestamp);
+                    dt.setHours(0,0,0,0);
+                    if (dt.getTime() === today.getTime()) count++;
+                  });
+                  return count;
+                })()}
+                icon={<BarChartBig className="h-5 w-5 text-yellow-400" />}
+                description="Number of games played today."
+              />
+              <StatsCard
+                title="Mastered Words Today"
+                value={words.filter(w => w.fsrsCard.state === 'Review' && w.fsrsCard.last_review && new Date(w.fsrsCard.last_review).setHours(0,0,0,0) === new Date().setHours(0,0,0,0)).length}
+                icon={<BarChartBig className="h-5 w-5 text-green-500" />}
+                description="Words that reached 'mastered' (Review) state today."
+              />
+              <StatsCard
+                title="Retention Rate (7d)"
+                value={(() => {
+                  const log = quizLog ?? [];
+                  const today = new Date();
+                  let total = 0, correct = 0;
+                  for (let i = 0; i < 7; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() - i);
+                    d.setHours(0,0,0,0);
+                    log.forEach(r => {
+                      const dt = new Date(r.timestamp);
+                      dt.setHours(0,0,0,0);
+                      if (dt.getTime() === d.getTime()) {
+                        total++;
+                        if (r.correct) correct++;
+                      }
+                    });
                   }
-                });
-              }
-              return total ? Math.round((correct/total)*100) + '%' : '—';
-            })()}
-            icon={<Brain className="h-5 w-5 text-purple-400" />}
-            description="% of correct answers in the last 7 days."
-          />
+                  return total ? Math.round((correct/total)*100) + '%' : '—';
+                })()}
+                icon={<Brain className="h-5 w-5 text-purple-400" />}
+                description="% of correct answers in the last 7 days."
+              />
+            </div>
+          </div>
+          
+          {/* Stage Distribution Chart - Always second */}
+          <div>
+            <ErrorBoundary FallbackComponent={ChartErrorFallback}>
+              <StageDistributionDonutChart words={words} isLoading={isLoading} />
+            </ErrorBoundary>
+          </div>
         </div>
-        <div className="col-span-2 text-xs text-muted-foreground mt-2">
+        
+        {/* Note about mastery */}
+        <div className="text-xs text-muted-foreground">
           <b>Note:</b> "Mastered" means a word is in the <b>Review</b> state (long-term memory). "Relearning" means a word was mastered but lapsed and is being re-learned. Higher state is not always better.
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Mastered Words Over Time Chart */}
-        <div className="bg-background rounded-lg border p-4 shadow-md col-span-2">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 className="h-5 w-5 text-green-500" />
-            <span className="text-lg font-semibold">Total Mastered Words Over Time</span>
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={useMemo(() => {
-              // Build a time series of total mastered words by day
-              const byDay: Record<string, number> = {};
-              words.forEach(w => {
-                // Use 'Review' as the mastered state (per FSRS logic)
-                if (w.fsrsCard?.state === 'Review' && w.fsrsCard?.last_review) {
-                  const d = w.fsrsCard.last_review.slice(0, 10);
-                  byDay[d] = (byDay[d] || 0) + 1;
-                }
-              });
-              // Build cumulative sum by day
-              const allDays = Object.keys(byDay).sort();
-              let cumulative = 0;
-              const data = allDays.map(date => {
-                cumulative += byDay[date];
-                return { date, mastered: cumulative };
-              });
-              // Determine the range: from first mastered word or last 30 days
-              const today = new Date();
-              const firstDay = allDays.length > 0 ? new Date(allDays[0]) : today;
-              const daysBetween = Math.floor((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
-              let days: { date: string; mastered: number }[] = [];
-              let lastValue = 0;
-              let startIdx = 0;
-              if (daysBetween < 30) {
-                // Show from first mastered word date to today
-                for (let i = daysBetween; i >= 0; i--) {
-                  const d = new Date(today);
-                  d.setDate(today.getDate() - i);
-                  const key = d.toISOString().slice(0, 10);
-                  const found = data.find(x => x.date === key);
-                  if (found) lastValue = found.mastered;
-                  days.push({ date: key.slice(5), mastered: lastValue });
-                }
-              } else {
-                // Show only last 30 days
-                for (let i = 29; i >= 0; i--) {
-                  const d = new Date(today);
-                  d.setDate(today.getDate() - i);
-                  const key = d.toISOString().slice(0, 10);
-                  const found = data.find(x => x.date === key);
-                  if (found) lastValue = found.mastered;
-                  days.push({ date: key.slice(5), mastered: lastValue });
-                }
-              }
-              return days;
-            }, [words])} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis label={{ value: 'Words', angle: -90, position: 'insideLeft', fontSize: 10 }} tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Line type="monotone" dataKey="mastered" stroke="#10b981" name="Mastered Words" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="text-xs text-muted-foreground mt-2">Shows your cumulative total of mastered words (FSRS state = Review) over the last 30 days.</div>
+
+      {/* Mastered Words Over Time Chart */}
+      <div className="bg-background rounded-lg border p-4 shadow-md">
+        <div className="flex items-center gap-2 mb-2">
+          <BarChart3 className="h-5 w-5 text-green-500" />
+          <span className="text-lg font-semibold">Total Mastered Words Over Time</span>
         </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={useMemo(() => {
+            // Build a time series of total mastered words by day
+            const byDay: Record<string, number> = {};
+            words.forEach(w => {
+              // Use 'Review' as the mastered state (per FSRS logic)
+              if (w.fsrsCard?.state === 'Review' && w.fsrsCard?.last_review) {
+                const d = w.fsrsCard.last_review.slice(0, 10);
+                byDay[d] = (byDay[d] || 0) + 1;
+              }
+            });
+            // Build cumulative sum by day
+            const allDays = Object.keys(byDay).sort();
+            let cumulative = 0;
+            const data = allDays.map(date => {
+              cumulative += byDay[date];
+              return { date, mastered: cumulative };
+            });
+            // Determine the range: from first mastered word or last 30 days
+            const today = new Date();
+            const firstDay = allDays.length > 0 ? new Date(allDays[0]) : today;
+            const daysBetween = Math.floor((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
+            let days: { date: string; mastered: number }[] = [];
+            let lastValue = 0;
+            let startIdx = 0;
+            if (daysBetween < 30) {
+              // Show from first mastered word date to today
+              for (let i = daysBetween; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                const key = d.toISOString().slice(0, 10);
+                const found = data.find(x => x.date === key);
+                if (found) lastValue = found.mastered;
+                days.push({ date: key.slice(5), mastered: lastValue });
+              }
+            } else {
+              // Show only last 30 days
+              for (let i = 29; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                const key = d.toISOString().slice(0, 10);
+                const found = data.find(x => x.date === key);
+                if (found) lastValue = found.mastered;
+                days.push({ date: key.slice(5), mastered: lastValue });
+              }
+            }
+            return days;
+          }, [words])} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+            <YAxis label={{ value: 'Words', angle: -90, position: 'insideLeft', fontSize: 10 }} tick={{ fontSize: 12 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="mastered" stroke="#10b981" name="Mastered Words" strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="text-xs text-muted-foreground mt-2">Shows your cumulative total of mastered words (FSRS state = Review) over the last 30 days.</div>
       </div>
+
+      {/* Study Streaks */}
       <div className="rounded-lg border bg-background p-4 shadow-md">
         <div className="flex items-center gap-2 mb-2">
           <CalendarDays className="h-5 w-5 text-orange-400" />
           <span className="text-lg font-semibold">Study Streaks</span>
         </div>
-        <CalendarHeatmap />
+        <CalendarHeatmap log={quizLog ?? []} />
       </div>
+
       {/* Mastery Forecast Section */}
       <div className="rounded-lg border bg-background p-4 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">

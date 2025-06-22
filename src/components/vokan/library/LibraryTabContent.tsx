@@ -113,7 +113,7 @@ const LibraryTabContent = () => {
   }, [words]);
 
   return (
-    <div className="space-y-6 p-2 sm:p-4 md:p-6">
+    <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
         <div className="flex-1 flex items-center gap-2">
           {/* Other controls (filters, add, etc.) can go here */}
@@ -122,12 +122,13 @@ const LibraryTabContent = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="px-3 py-1 rounded bg-primary text-white hover:bg-primary/90 text-sm font-medium flex items-center gap-2 shadow-md border border-primary/30"
+                size="sm"
+                variant="outline"
                 disabled={isLoading || !words.length}
-                title="Export vocabulary"
+                className="h-8 px-3"
               >
-                <Download className="h-4 w-4 mr-1" />
-                Export
+                <Download className="h-4 w-4" />
+                <span className="ml-2">Export</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -140,7 +141,7 @@ const LibraryTabContent = () => {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
-           <h2 className="text-2xl font-semibold">Add New Word</h2>
+           <h2 className="text-xl sm:text-2xl font-semibold">Add New Word</h2>
            <AddWordForm disabled={isSyncing} />
         </div>
         <ImportWordsSection disabled={isSyncing} />
@@ -149,7 +150,7 @@ const LibraryTabContent = () => {
       <Separator className="my-8" />
 
       <div>
-        <h2 className="text-2xl font-semibold mb-4">My Vocabulary Library</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold mb-3 sm:mb-4">My Vocabulary Library</h2>
         <WordFilters
           searchTerm={searchTerm}
           onSearchTermChange={handleSearchTermChange}

@@ -1,0 +1,14 @@
+.wordlist-delete-btn {
+  transition: background 0.18s, color 0.18s;
+  border-radius: 0.5rem;
+}
+.wordlist-delete-btn:hover, .wordlist-delete-btn:focus-visible {
+  background: hsl(var(--destructive));
+  color: #fff !important;
+}
+.wordlist-delete-btn svg {
+  transition: color 0.18s;
+}
+.wordlist-delete-btn:hover svg, .wordlist-delete-btn:focus-visible svg {
+  color: #fff !important;
+}

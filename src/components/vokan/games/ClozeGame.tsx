@@ -16,13 +16,14 @@ import { useWordDetails } from './useWordDetails';
 import { useWordDetailsPanelState } from './useWordDetailsPanelState';
 import FamiliarityDot from './FamiliarityDot';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { isDue, logQuizResult } from '@/lib/utils';
+import { isDue, logQuizResult, logQuizResultFirestore } from '@/lib/utils';
 import { useWordGameCore } from './useWordGameCore';
 import { Due } from '@/components/vokan/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
 import { useWordGameAnswerState } from './useWordGameAnswerState';
 import { useWordGameKeyboardNavigation } from './useWordGameKeyboardNavigation';
 import { showStandardToast } from '@/lib/showStandardToast';
+import { useAuth } from '@/context/AuthContext';
 
 interface ClozeGameProps {
   onStopGame: () => void;
@@ -34,6 +35,7 @@ const DEBUG = false; // Set to false in production
 const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
   const { getDecoyWords, updateWordSRS } = useVocabulary();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Local state for answer selection and focus
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -146,15 +148,15 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
     }
   
     if (core.currentQuestion && startTime.current) {
-      logQuizResult({
+      logQuizResultFirestore({
         word: core.currentQuestion.targetWord,
         correct,
         duration: Date.now() - startTime.current,
         game: 'cloze',
         timestamp: Date.now(),
-      });
+      }, user?.uid);
     }
-  }, [core.currentQuestion, isCorrect, core.libraryWords, toast, updateWordSRS, selectedAnswer, core.isMounted, core.wordDetailsApi, core.showPanelForWord]);
+  }, [core.currentQuestion, isCorrect, core.libraryWords, toast, updateWordSRS, selectedAnswer, core.isMounted, core.wordDetailsApi, core.showPanelForWord, user?.uid]);
 
   useEffect(() => {
     if (!core.vocabLoading && core.hasEnoughWords && !core.gameInitialized && core.isMounted.current) {
@@ -255,7 +257,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
 
   return (
     <div className="space-y-6">
-      <Card className="w-full max-w-2xl mx-auto mt-6 px-2 sm:px-6" aria-label="Cloze Game Card">
+      <Card className="w-full max-w-2xl mx-auto mt-2 px-1 sm:mt-4 sm:px-6 rounded-lg shadow-lg border border-gray-200">
         <CardHeader className="relative">
           {/* Indicators in top left */}
           {(() => {
@@ -269,7 +271,7 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
             );
           })()}
           <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl">Cloze Test</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl">Cloze Test</CardTitle>
             {(core.isLoadingNextQuestion) && ( // Simplified loading indicator
               <div className="flex items-center text-xs text-muted-foreground">
                 <Sparkles className="h-4 w-4 text-primary mr-1" /> 
@@ -278,10 +280,10 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
               </div>
             )}
           </div>
-          <CardDescription>Choose the word that best completes the sentence. Use number keys (1-4) or arrow keys & Enter.</CardDescription>
+          <CardDescription className="text-sm sm:text-base">Choose the word that best completes the sentence. Use number keys (1-4) or arrow keys & Enter.</CardDescription>
         </CardHeader>
         
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 sm:space-y-6">
           {core.isLoadingCurrentQuestion && !core.currentQuestion && ( // Show if loading and no current question yet
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -292,12 +294,11 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
           {!core.isLoadingCurrentQuestion && core.currentQuestion && (
             <>
               <div className="flex items-center justify-center gap-2 mb-2">
-                {/* This p tag was missing a closing tag, now fixed */}
-                <p className="text-xl md:text-2xl text-center p-6 bg-muted rounded-lg shadow-inner min-h-[100px] flex items-center justify-center mb-0">
+                <p className="text-lg sm:text-xl md:text-2xl text-center p-3 sm:p-6 bg-muted rounded-lg shadow-inner min-h-[60px] sm:min-h-[100px] flex items-center justify-center mb-0">
                   {core.currentQuestion.sentenceWithBlank.replace(/___/g, " ______ ")}
                 </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {core.currentQuestion.options.map((option, index) => {
                   const isSelected = selectedAnswer === option;
                   const isAttemptedIncorrect = false; // Not tracking attemptedAnswers in new version
@@ -308,18 +309,20 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
                   if (isSelected) {
                     buttonVariant = isCorrect ? 'default' : 'destructive';
                   }
-                  let buttonClass = `relative text-base py-5 transition-all duration-200 ease-in-out transform
+                  let buttonClass = `relative text-base sm:text-lg py-4 sm:py-5 min-h-[56px] sm:min-h-[auto] transition-all duration-200 ease-in-out transform
                     ${isSelected && isCorrect ? 'bg-green-500 hover:bg-green-600 border-green-500 text-white animate-pulse' : ''}
                     ${isSelected && isCorrect === false ? 'bg-red-500 hover:bg-red-600 border-red-500 text-white' : ''}
                     ${isAttemptedIncorrect && !isCorrect ? 'opacity-60 line-through' : ''}
                     ${isFocused && !isDisabled ? 'ring ring-primary ring-offset-2' : ''}
-                    ${isCorrect ? 'hover:scale-100' : (isDisabled ? 'hover:scale-100' : 'hover:scale-105')}`;
+                    ${isCorrect ? 'hover:scale-100' : (isDisabled ? 'hover:scale-100' : 'hover:scale-105')}
+                    w-full rounded-lg`;
                   return (
                     <Button
                       key={option}
                       variant={buttonVariant as any}
                       size="lg"
                       className={buttonClass}
+                      style={{ fontSize: '1.1rem', padding: '1.1rem 0.5rem' }}
                       onClick={() => handleAnswerSubmit(option)}
                       onFocus={() => !isDisabled && core.safeSetState(setFocusedOptionIndex, index)}
                       ref={el => { optionButtonsRef.current[index] = el ?? null; }}
@@ -361,28 +364,27 @@ const ClozeGame: FC<ClozeGameProps> = ({ onStopGame, disabled }) => {
         </CardContent>
         
         <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4">
-          <Button onClick={onStopGame} variant="outline" size="lg" className="w-full sm:w-auto"
+          <Button onClick={onStopGame} variant="outline" size="default"
             disabled={core.isLoadingTransition.current || disabled}
             aria-label="Stop Game"
           >
-            <StopCircle className="mr-2 h-5 w-5" /> Stop Game
+            <StopCircle className="mr-2 h-4 w-4" /> Stop
           </Button>
-          
+
           {isCorrect !== null && core.currentQuestion && (
             <Button 
               onClick={core.loadCurrentAndPrepareNext} 
-              className="w-full sm:w-auto" 
-              size="lg" 
-              variant="default" 
+              size="default" 
+              variant="default"
               disabled={core.isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion || disabled}
               aria-label="Next Question"
             >
               {(core.isLoadingTransition.current || core.isLoadingCurrentQuestion || core.isLoadingNextQuestion) ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="mr-2 h-5 w-4" />
-              )} 
-              Next Question (Space/Enter)
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Next Question
             </Button>
           )}
         </CardFooter>

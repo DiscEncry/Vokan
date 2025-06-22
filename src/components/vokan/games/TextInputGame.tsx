@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, CheckCircle, XCircle, Lightbulb, RefreshCw, StopCircle, Info, Sparkles, KeyRound, Send, CalendarClock } from 'lucide-react';
 import { useVocabulary } from '@/context/VocabularyContext';
+import { useAuth } from '@/context/AuthContext';
 import type { Word, TextInputQuestion, GeneratedWordDetails } from '@/types';
 import { generateTextInputQuestion } from '@/ai/flows/generate-text-input-question';
 import { generateWordDetails } from '@/ai/flows/generate-word-details';
@@ -14,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useWordGameCore } from './useWordGameCore';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { isDue, logQuizResult } from '@/lib/utils';
+import { isDue, logQuizResult, logQuizResultFirestore } from '@/lib/utils';
 import WordDetailPanel from './WordDetailPanel';
 import { Due } from '@/components/vokan/library/Due';
 import { WordStageIndicator } from './WordStageIndicator';
@@ -35,6 +36,7 @@ const DEBUG = false; // Set to false in production
 // --- Component ---
 const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const generateSingleQuestion = React.useCallback(async (targetWord: Word, _abortController: AbortController) => {
     try {
@@ -234,13 +236,13 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
       }
     }
     if (core.currentQuestion && answerState.startTime && answerState.startTime.current) {
-      logQuizResult({
+      logQuizResultFirestore({
         word: core.currentQuestion.targetWord,
         correct: currentlyCorrect,
         duration: Date.now() - answerState.startTime.current,
         game: 'text-input',
         timestamp: Date.now(),
-      });
+      }, user?.uid);
     }
     // Show word details panel after answer
     if (core.currentQuestion) {
@@ -358,8 +360,8 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="shadow-lg max-w-2xl mx-auto">
+    <div className="space-y-3 sm:space-y-4">
+      <Card className="shadow-lg max-w-2xl mx-auto px-1 sm:px-4 rounded-lg border border-gray-200">
         <CardHeader className="relative pb-4">
           {/* Indicators in top left */}
           {(() => {
@@ -373,7 +375,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
             );
           })()}
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xl">Text Input Challenge</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Text Input Challenge</CardTitle>
             {(core.isLoadingNextQuestion) && (
               <div className="flex items-center text-xs text-muted-foreground">
                 <Sparkles className="h-3 w-3 text-primary mr-1" /> 
@@ -382,10 +384,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
               </div>
             )}
           </div>
-          <CardDescription className="text-sm">Type the English word that fits the blank</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">Type the English word that fits the blank</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           {core.isLoadingCurrentQuestion && !core.currentQuestion && (
             <div className="flex items-center justify-center h-32">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -396,16 +398,15 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
           {!core.isLoadingCurrentQuestion && core.currentQuestion && core.currentQuestion.correctAnswer && (
             <>
               <div className="flex items-center justify-center gap-2 mb-2">
-                <p className="text-xl md:text-2xl text-center p-4 sm:p-6 bg-muted rounded-lg shadow-inner min-h-[80px] sm:min-h-[100px] flex items-center justify-center mb-0">
+                <p className="text-lg sm:text-xl md:text-2xl text-center p-2 sm:p-4 md:p-6 bg-muted rounded-lg shadow-inner min-h-[60px] sm:min-h-[100px] flex items-center justify-center mb-0">
                   {core.currentQuestion.sentenceWithBlank.replace(/___/g, " ______ ")}
                 </p>
               </div>
               <div className="text-center mb-4">
-                <span className="text-sm text-muted-foreground bg-secondary/20 rounded px-3 py-1">
+                <span className="text-xs sm:text-sm text-muted-foreground bg-secondary/20 rounded px-2 py-1 sm:px-3">
                   {core.currentQuestion.translatedHint}
                 </span>
               </div>
-
               <div className="flex flex-col items-center gap-3">
                 {renderCharacterSpans()}
                 <input
@@ -459,12 +460,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
           )}
         </CardContent>
 
-        <CardFooter className="flex justify-between items-center gap-3 pt-2">
-          <Button onClick={onStopGame} variant="outline" size="default"
-            disabled={disabled || isLoadingTransition.current}>
-            <StopCircle className="mr-2 h-4 w-4" /> Stop
-          </Button>
-
+        <CardFooter className="flex flex-col gap-3 pt-2">
           {answerState.isCorrect === null && core.currentQuestion && (
             <Button 
               onClick={handleSubmit} 
@@ -474,7 +470,10 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
               <Send className="mr-2 h-4 w-4" /> Submit
             </Button>
           )}
-
+          <Button onClick={onStopGame} variant="outline" size="default"
+            disabled={disabled || isLoadingTransition.current}>
+            <StopCircle className="mr-2 h-4 w-4" /> Stop
+          </Button>
           {answerState.isCorrect !== null && ( 
             <Button 
               onClick={loadCurrentAndPrepareNext} 
@@ -487,7 +486,7 @@ const TextInputGame: FC<TextInputGameProps> = React.memo(({ onStopGame, disabled
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
-              Next (Space/Enter)
+              Next Question
             </Button>
           )}
         </CardFooter>

@@ -70,8 +70,8 @@ const WordFilters: FC<WordFiltersProps> = ({
   }, [searchTerm]);
 
   return (
-    <div className="p-5 bg-card border rounded-xl shadow-md space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    <div className="p-4 bg-card border rounded-xl shadow-md space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Search Input */}
         <div className="space-y-2">
           <label htmlFor="search-word" className="text-sm font-medium text-muted-foreground">Search Word</label>
@@ -92,7 +92,7 @@ const WordFilters: FC<WordFiltersProps> = ({
         {/* Multi-Stage Filter (Checkboxes) */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-muted-foreground">Filter by Stages</label>
-          <div className="flex flex-wrap gap-3 mt-2">
+          <div className="flex flex-wrap gap-3 mt-3">
             {['New', 'Learning', 'Review', 'Relearning'].map(stage => (
               <label key={stage} className="flex items-center gap-2 cursor-pointer group">
                 <div className="relative flex items-center">
@@ -160,12 +160,12 @@ const WordFilters: FC<WordFiltersProps> = ({
         </div>
       </div>
       
-      <div className="flex justify-end">
+      <div className="flex justify-center sm:justify-end">
         <Button 
           onClick={onResetFilters} 
           variant="outline" 
           size="sm" 
-          className="flex items-center gap-2 hover:bg-muted transition-colors"
+          className="flex items-center gap-2 hover:bg-muted transition-colors w-full sm:w-auto"
         >
           <RotateCcw className="h-4 w-4" />
           Reset Filters

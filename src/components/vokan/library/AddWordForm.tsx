@@ -235,7 +235,7 @@ const AddWordForm: FC<AddWordFormProps> = React.memo(({ disabled }) => {
   }, [newWord, addWord, libraryWords, toast, isLoadingUI]);
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 items-start w-full">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 items-start w-full">
       <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
         <PopoverAnchor asChild>
           <div className="relative w-full">
@@ -342,7 +342,7 @@ const AddWordForm: FC<AddWordFormProps> = React.memo(({ disabled }) => {
         variant="default" 
         size="lg" 
         disabled={disabled || isLoadingUI || !newWord.trim()} 
-        className="mt-2"
+        className="mt-3 w-full h-12 text-base font-medium"
       >
         {isAdding ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : 
          isValidatingLocally ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : 
