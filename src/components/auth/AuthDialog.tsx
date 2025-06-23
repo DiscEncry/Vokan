@@ -128,7 +128,7 @@ export default function AuthDialog() {
   if (profileError && !profile && !profileLoading && !showWelcome && !pendingGoogleUser && !isRegistering) {
     return (
       <Dialog open={true} onOpenChange={forceRefresh}>
-        <DialogContent>
+        <DialogContent hideCloseButton>
           <DialogHeader>
             <DialogTitle>Profile Error</DialogTitle>
             <DialogDescription>{profileError}</DialogDescription>
@@ -146,34 +146,40 @@ export default function AuthDialog() {
     <>
       {/* Block UI until profile is loaded, but only show one dialog at a time */}
       <Dialog open={showSignInDialog && !showPasswordReset} onOpenChange={() => {}}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isRegistering ? "Create Account" : "Welcome Back V2"}</DialogTitle>
-            <DialogDescription>
-              {isRegistering ? "Register a new account" : "Sign in to your account"}
-            </DialogDescription>
-          </DialogHeader>
-          {isRegistering ? (
-            <RegisterForm
-              onSuccess={closeDialog}
-              onGoogleSignIn={handleGoogleSignIn}
-              googleLoading={isGoogleLoading}
-              onShowLogin={() => { clearError(); setRegistering(false); }}
-            />
-          ) : (
-            <LoginForm
-              onSuccess={closeDialog}
-              onShowPasswordReset={() => setShowPasswordReset(true)}
-              onGoogleSignIn={handleGoogleSignIn}
-              googleLoading={isGoogleLoading}
-              onShowRegister={() => { clearError(); setRegistering(true); }}
-            />
-          )}
+        <DialogContent hideCloseButton
+          className="sm:max-w-lg sm:max-h-[80vh] sm:rounded-lg w-screen h-screen max-w-none max-h-none rounded-none p-0 flex flex-col"
+        >
+          <div className="flex-1 flex flex-col overflow-y-auto">
+            <DialogHeader className="pt-8 px-4 pb-2" >
+              <DialogTitle>{isRegistering ? "Create Account" : "Welcome Back V2"}</DialogTitle>
+              <DialogDescription>
+                {isRegistering ? "Register a new account" : "Sign in to your account"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 flex flex-col justify-center px-4 pb-8">
+              {isRegistering ? (
+                <RegisterForm
+                  onSuccess={closeDialog}
+                  onGoogleSignIn={handleGoogleSignIn}
+                  googleLoading={isGoogleLoading}
+                  onShowLogin={() => { clearError(); setRegistering(false); }}
+                />
+              ) : (
+                <LoginForm
+                  onSuccess={closeDialog}
+                  onShowPasswordReset={() => setShowPasswordReset(true)}
+                  onGoogleSignIn={handleGoogleSignIn}
+                  googleLoading={isGoogleLoading}
+                  onShowRegister={() => { clearError(); setRegistering(true); }}
+                />
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Password reset dialog */}
       <Dialog open={showPasswordReset} onOpenChange={() => setShowPasswordReset(false)}>
-        <DialogContent>
+        <DialogContent hideCloseButton>
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>Enter your email to receive a password reset link.</DialogDescription>
@@ -184,7 +190,7 @@ export default function AuthDialog() {
       {/* Welcome dialog for new Google users */}
       {showWelcome && pendingGoogleUser && (
         <Dialog open={true} onOpenChange={() => {}}>
-          <DialogContent>
+          <DialogContent hideCloseButton>
             <DialogHeader>
               <DialogTitle>Welcome!</DialogTitle>
               <DialogDescription>
